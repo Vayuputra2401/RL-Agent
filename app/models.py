@@ -24,6 +24,7 @@ class Invoice(BaseModel):
     po_reference: Optional[str] = None
     line_items: List[LineItem]
     freight_charge: float = 0.0
+    tax_amount: float = 0.0
     invoice_total: float
     currency: str = "USD"
 
@@ -59,15 +60,22 @@ class DecisionType(str, Enum):
     APPROVE_FULL    = "APPROVE_FULL"
     APPROVE_PARTIAL = "APPROVE_PARTIAL"
     REJECT          = "REJECT"
+    QUERY_VENDOR    = "QUERY_VENDOR"
+    ESCALATE        = "ESCALATE"
+    HOLD            = "HOLD"
 
 
 class ReasonCode(str, Enum):
-    MATCH_CONFIRMED    = "MATCH_CONFIRMED"
-    QUANTITY_MISMATCH  = "QUANTITY_MISMATCH"
-    PRICE_DISCREPANCY  = "PRICE_DISCREPANCY"
-    POLICY_VIOLATION   = "POLICY_VIOLATION"
-    NO_PO_FOUND        = "NO_PO_FOUND"
-    DUPLICATE_INVOICE  = "DUPLICATE_INVOICE"
+    MATCH_CONFIRMED       = "MATCH_CONFIRMED"
+    QUANTITY_MISMATCH     = "QUANTITY_MISMATCH"
+    PRICE_DISCREPANCY     = "PRICE_DISCREPANCY"
+    POLICY_VIOLATION      = "POLICY_VIOLATION"
+    NO_PO_FOUND           = "NO_PO_FOUND"
+    DUPLICATE_INVOICE     = "DUPLICATE_INVOICE"
+    VENDOR_MISMATCH       = "VENDOR_MISMATCH"
+    TAX_DISCREPANCY       = "TAX_DISCREPANCY"
+    PENDING_CLARIFICATION = "PENDING_CLARIFICATION"
+    MANAGER_REVIEW        = "MANAGER_REVIEW"
 
 
 class APAction(BaseModel):
@@ -90,6 +98,10 @@ class APObservation(BaseModel):
     paid_invoice_ids: List[str] = []
     step_count: int = 0
     max_steps: int = 1
+    freight_cap: float = 50.0
+    price_tolerance: float = 0.01
+    action_history: List[Dict[str, Any]] = []
+    context_notes: List[str] = []
 
 
 # ── Reward model ──────────────────────────────────────────────────────────────

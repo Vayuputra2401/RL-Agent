@@ -36,8 +36,8 @@ check("/health returns status=ok", health.get("status") == "ok")
 
 status, tasks = get("/tasks")
 check("GET /tasks returns 200", status == 200)
-check("3+ tasks registered", len(tasks) >= 3, f"found {len(tasks)}")
-check("6 tasks registered", len(tasks) == 6, f"found {len(tasks)}")
+check("3+ tasks registered",  len(tasks) >= 3,  f"found {len(tasks)}")
+check("6+ tasks registered",  len(tasks) >= 6,  f"found {len(tasks)}")
 diffs = [t["difficulty"] for t in tasks]
 check("easy tasks present",   "easy"   in diffs)
 check("medium tasks present", "medium" in diffs)

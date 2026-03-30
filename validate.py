@@ -65,7 +65,7 @@ try:
     check("has 'endpoints' field", "endpoints" in spec)
     check("has 'reward_range'",    "reward_range" in spec)
     task_ids = [t["id"] for t in spec.get("tasks", [])]
-    check("6 tasks declared in openenv.yaml", len(task_ids) == 6,
+    check("6+ tasks declared in openenv.yaml", len(task_ids) >= 6,
           f"found {len(task_ids)}")
     endpoints = spec.get("endpoints", {})
     for ep in ["reset", "step", "state", "tasks", "health"]:
@@ -86,8 +86,10 @@ try:
         StateResponse, TaskInfo,
     )
     check("All Pydantic models import cleanly", True)
-    check("DecisionType has 3 values",  len(DecisionType) == 3)
-    check("ReasonCode has 6 values",    len(ReasonCode)   == 6)
+    check("DecisionType has 3+ values (incl. intermediate actions)",
+          len(DecisionType) >= 3)
+    check("ReasonCode has 6+ values (incl. new codes)",
+          len(ReasonCode)   >= 6)
 except Exception as e:
     check("Pydantic models importable", False, str(e))
 
@@ -97,15 +99,14 @@ try:
     from app.tasks import TASKS, grade_action
     from app.models import APAction, DecisionType, ReasonCode
 
-    check("6 tasks registered", len(TASKS) == 6, f"found {len(TASKS)}")
+    check("6+ tasks registered", len(TASKS) >= 6, f"found {len(TASKS)}")
 
-    expected_difficulties = {"easy": 2, "medium": 2, "hard": 2}
     difficulty_counts: dict = {}
     for spec in TASKS.values():
         difficulty_counts[spec.difficulty] = difficulty_counts.get(spec.difficulty, 0) + 1
-    for diff, expected_count in expected_difficulties.items():
-        check(f"2 tasks at difficulty='{diff}'",
-              difficulty_counts.get(diff, 0) == expected_count,
+    for diff in ["easy", "medium", "hard"]:
+        check(f"At least 2 tasks at difficulty='{diff}'",
+              difficulty_counts.get(diff, 0) >= 2,
               f"found {difficulty_counts.get(diff, 0)}")
 
     # Run each grader with a fixed seed and dummy action — verify score in [0,1]

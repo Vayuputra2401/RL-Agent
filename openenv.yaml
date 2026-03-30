@@ -1,11 +1,13 @@
 name: ap-clerk-env
-version: "2.0.0"
+version: "2.1.0"
 description: >
   AI Accounts Payable Clerk — Three-Way Invoice Matching Environment.
   An agent must cross-reference vendor invoices against company Purchase Orders
-  and warehouse Goods Receipt Notes, apply policy rules, and decide whether to
-  approve, partially approve, or reject each invoice for payment.
-  Six fully randomised tasks across easy / medium / hard difficulty levels.
+  and warehouse Goods Receipt Notes, apply episode-specific policy rules, and
+  decide whether to approve, partially approve, or reject each invoice for payment.
+  Ten fully randomised tasks across easy / medium / hard difficulty levels.
+  Features: randomised policy thresholds per episode, distractor documents,
+  multi-step episodes (ESCALATE / QUERY_VENDOR), and harder graders.
 
 author: "Pathikreet"
 entrypoint: "uvicorn app.main:app --host 0.0.0.0 --port 7860"
@@ -16,6 +18,7 @@ tags:
   - reasoning
   - arithmetic
   - policy-compliance
+  - multi-step
   - openenv
 
 tasks:
@@ -43,6 +46,18 @@ tasks:
     expected_decision: REJECT
     target_score: 1.0
 
+  - id: medium_split_delivery
+    name: "Split Delivery Reconciliation"
+    difficulty: medium
+    expected_decision: APPROVE_FULL
+    target_score: 1.0
+
+  - id: medium_vendor_mismatch
+    name: "Vendor Name Mismatch"
+    difficulty: medium
+    expected_decision: REJECT
+    target_score: 1.0
+
   - id: hard_policy_violation
     name: "Policy Violation — Unauthorized Freight Charge"
     difficulty: hard
@@ -55,14 +70,34 @@ tasks:
     expected_decision: REJECT
     target_score: 1.0
 
+  - id: hard_partial_po_match
+    name: "Partial PO Coverage"
+    difficulty: hard
+    expected_decision: APPROVE_PARTIAL
+    target_score: 1.0
+
+  - id: hard_tax_discrepancy
+    name: "Unauthorized Tax Charge"
+    difficulty: hard
+    expected_decision: REJECT
+    target_score: 1.0
+
 action_space:
   type: APAction
   fields:
-    decision:        { type: enum, values: [APPROVE_FULL, APPROVE_PARTIAL, REJECT] }
+    decision:
+      type: enum
+      values: [APPROVE_FULL, APPROVE_PARTIAL, REJECT, QUERY_VENDOR, ESCALATE, HOLD]
+      terminal: [APPROVE_FULL, APPROVE_PARTIAL, REJECT]
+      intermediate: [QUERY_VENDOR, ESCALATE, HOLD]
     approved_amount: { type: float, range: [0.0, inf] }
-    reason_code:     { type: enum, values: [MATCH_CONFIRMED, QUANTITY_MISMATCH,
-                       PRICE_DISCREPANCY, POLICY_VIOLATION, NO_PO_FOUND, DUPLICATE_INVOICE] }
-    explanation:     { type: string, min_length: 10, max_length: 600 }
+    reason_code:
+      type: enum
+      values: [MATCH_CONFIRMED, QUANTITY_MISMATCH, PRICE_DISCREPANCY,
+               POLICY_VIOLATION, NO_PO_FOUND, DUPLICATE_INVOICE,
+               VENDOR_MISMATCH, TAX_DISCREPANCY,
+               PENDING_CLARIFICATION, MANAGER_REVIEW]
+    explanation: { type: string, min_length: 10, max_length: 600 }
 
 observation_space:
   type: APObservation
@@ -77,11 +112,16 @@ observation_space:
     company_policy:   string
     step_count:       int
     max_steps:        int
+    freight_cap:      float
+    price_tolerance:  float
+    action_history:   List[dict]
+    context_notes:    List[string]
 
 reward_range: [0.0, 1.0]
 reward_type: APReward
 reward_partial_credit: true
-episode_termination: single_step
+episode_termination: terminal_action_or_max_steps
+multi_step_support: true
 randomised: true
 seed_support: true
 

@@ -44,7 +44,7 @@ if _missing:
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
-MAX_TOKENS  = 512
+MAX_TOKENS  = 600
 TEMPERATURE = 0.0
 
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -59,14 +59,32 @@ SYSTEM_PROMPT = textwrap.dedent("""
       "decision":        "APPROVE_FULL" | "APPROVE_PARTIAL" | "REJECT",
       "approved_amount": <float — dollar amount to pay, 0.0 if REJECT>,
       "reason_code":     "MATCH_CONFIRMED" | "QUANTITY_MISMATCH" | "PRICE_DISCREPANCY" |
-                         "POLICY_VIOLATION" | "NO_PO_FOUND" | "DUPLICATE_INVOICE",
+                         "POLICY_VIOLATION" | "NO_PO_FOUND" | "DUPLICATE_INVOICE" |
+                         "VENDOR_MISMATCH" | "TAX_DISCREPANCY",
       "explanation":     "<10–500 char plain-English justification>"
     }
 
     Decision rules:
     - APPROVE_FULL: Invoice, PO and GRN all match; pay the full invoice total.
-    - APPROVE_PARTIAL: Quantities/prices differ; pay only for what was received/agreed.
-    - REJECT: Policy violation, no PO, or unresolvable discrepancy; do not pay.
+    - APPROVE_PARTIAL: Partial match (quantity shortfall or partial PO coverage);
+      pay only for what was received and authorised.
+    - REJECT: Policy violation, no PO, vendor name mismatch, tax discrepancy,
+      duplicate invoice, or unresolvable discrepancy; do not pay.
+
+    Mandatory checks before deciding:
+    1. Is there a valid OPEN Purchase Order matching the invoice PO reference?
+    2. Does the PO vendor name EXACTLY match the invoice vendor name?
+    3. Do invoice unit prices match agreed PO prices within the stated policy tolerance?
+    4. Do GRN quantities (sum ALL GRNs for this PO) confirm receipt of invoiced goods?
+    5. Is this invoice ID already in the paid ledger? (duplicate check)
+    6. Does the invoice include any charges not in the PO (freight above cap, tax, fees)?
+    7. Are ALL invoice line items covered by the PO?
+
+    Policy thresholds (freight cap, price tolerance) VARY per episode.
+    Always read the COMPANY POLICY section carefully for the exact values.
+
+    Ignore CLOSED purchase orders — they are historical records and do not authorise payment.
+    Ignore GRNs whose PO reference does not match the invoice's PO reference.
 """).strip()
 
 
@@ -77,14 +95,17 @@ def build_user_prompt(obs) -> str:
         f"line_total=${li.line_total:.2f}"
         for li in inv.line_items
     )
+    tax_line = f"  Tax         : ${inv.tax_amount:.2f}\n" if inv.tax_amount > 0 else ""
     invoice_block = (
         f"INVOICE {inv.invoice_id}\n"
         f"  Vendor      : {inv.vendor_name}\n"
         f"  PO Reference: {inv.po_reference or 'NONE'}\n"
         f"  Line Items  :\n{lines_text}\n"
         f"  Freight     : ${inv.freight_charge:.2f}\n"
+        f"{tax_line}"
         f"  TOTAL BILLED: ${inv.invoice_total:.2f}"
     )
+
     po_blocks = []
     for po in obs.purchase_orders:
         po_lines = "\n".join(
@@ -98,6 +119,7 @@ def build_user_prompt(obs) -> str:
             f"  Lines           :\n{po_lines}\n"
             f"  Authorized Total: ${po.authorized_total:.2f}"
         )
+
     grn_blocks = []
     for grn in obs.goods_receipts:
         grn_lines = "\n".join(
@@ -108,8 +130,10 @@ def build_user_prompt(obs) -> str:
             f"GRN {grn.grn_id} (for PO {grn.po_number})\n"
             f"  Lines:\n{grn_lines}"
         )
+
     po_section  = "\n\n".join(po_blocks)  if po_blocks  else "  (no purchase order found in system)"
     grn_section = "\n\n".join(grn_blocks) if grn_blocks else "  (no goods receipt found in system)"
+
     ledger_section = ""
     if obs.paid_invoice_ids:
         ledger_section = (
@@ -117,6 +141,26 @@ def build_user_prompt(obs) -> str:
             f"PAID INVOICE LEDGER (already settled):\n"
             + "\n".join(f"  - {iid}" for iid in obs.paid_invoice_ids) + "\n\n"
         )
+
+    context_section = ""
+    if obs.context_notes:
+        context_section = (
+            f"{'='*60}\n"
+            f"ADDITIONAL CONTEXT (revealed by prior query/escalation):\n"
+            + "\n".join(f"  {note}" for note in obs.context_notes) + "\n\n"
+        )
+
+    history_section = ""
+    if obs.action_history:
+        history_section = (
+            f"{'='*60}\n"
+            f"YOUR PRIOR ACTIONS THIS EPISODE:\n"
+            + "\n".join(
+                f"  Step {h['step']}: {h['decision']} — {h['explanation'][:80]}"
+                for h in obs.action_history
+            ) + "\n\n"
+        )
+
     return (
         f"TASK: {obs.task_name}\n"
         f"{obs.task_description}\n\n"
@@ -127,6 +171,8 @@ def build_user_prompt(obs) -> str:
         f"{'='*60}\n"
         f"{grn_section}\n\n"
         f"{ledger_section}"
+        f"{context_section}"
+        f"{history_section}"
         f"{'='*60}\n"
         f"COMPANY POLICY:\n{obs.company_policy}\n\n"
         f"Now output your JSON decision."
@@ -138,7 +184,7 @@ def call_llm(user_prompt: str) -> str:
         model=MODEL_NAME,
         max_tokens=MAX_TOKENS,
         temperature=TEMPERATURE,
-        timeout=60,                  # 60s per call — 6 tasks × 60s = well under 20min
+        timeout=60,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_prompt},
@@ -174,19 +220,24 @@ def parse_action(raw: str) -> Optional[APAction]:
 
 
 def run_task(task_id: str, seed: int = None) -> dict:
-    env = APClerkEnvironment()
-    obs = env.reset(task_id, seed=seed)
-    raw_response = call_llm(build_user_prompt(obs))
-    action = parse_action(raw_response)
-    if action is None:
-        print(f"  [WARN] Could not parse model output for {task_id}. Using fallback.")
-        action = APAction(
-            decision=DecisionType.REJECT,
-            approved_amount=0.0,
-            reason_code=ReasonCode.NO_PO_FOUND,
-            explanation="Unable to parse response; defaulting to safe rejection.",
-        )
-    _, reward, done, info = env.step(action)
+    env  = APClerkEnvironment()
+    obs  = env.reset(task_id, seed=seed)
+    done = False
+    reward = None
+
+    while not done:
+        raw_response = call_llm(build_user_prompt(obs))
+        action = parse_action(raw_response)
+        if action is None:
+            print(f"  [WARN] Could not parse model output for {task_id}. Using fallback.")
+            action = APAction(
+                decision=DecisionType.REJECT,
+                approved_amount=0.0,
+                reason_code=ReasonCode.NO_PO_FOUND,
+                explanation="Unable to parse response; defaulting to safe rejection.",
+            )
+        obs, reward, done, info = env.step(action)
+
     return {
         "task_id":         task_id,
         "decision":        action.decision.value,
@@ -196,6 +247,7 @@ def run_task(task_id: str, seed: int = None) -> dict:
         "score":           reward.score,
         "breakdown":       reward.breakdown,
         "feedback":        reward.feedback,
+        "steps_taken":     obs.step_count,
         "raw_response":    raw_response,
     }
 
@@ -215,13 +267,13 @@ def main():
         print(f"\n[{task_id}]")
         t0 = time.time()
         try:
-            result = run_task(task_id)
+            result  = run_task(task_id)
             elapsed = time.time() - t0
             results.append(result)
             total_score += result["score"]
             print(f"  Decision : {result['decision']}  (${result['approved_amount']:,.2f})")
             print(f"  Reason   : {result['reason_code']}")
-            print(f"  Score    : {result['score']:.3f}")
+            print(f"  Score    : {result['score']:.3f}   (steps: {result['steps_taken']})")
             print(f"  Feedback : {result['feedback'][:120]}")
             print(f"  Time     : {elapsed:.1f}s")
         except Exception as exc:
