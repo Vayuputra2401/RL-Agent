@@ -104,7 +104,7 @@ class APReward(BaseModel):
 # ── API wrappers ──────────────────────────────────────────────────────────────
 
 class ResetRequest(BaseModel):
-    task_id: str
+    task_id: str = "easy_perfect_match"
     session_id: Optional[str] = None
     seed: Optional[int] = None
 

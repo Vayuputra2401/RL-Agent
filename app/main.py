@@ -6,7 +6,7 @@ Exposes: POST /reset  POST /step  GET /state  GET /tasks  GET /health
 from __future__ import annotations
 import uuid
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -88,7 +88,9 @@ async def list_tasks():
 
 
 @app.post("/reset", response_model=ResetResponse)
-async def reset(body: ResetRequest):
+async def reset(body: Optional[ResetRequest] = None):
+    if body is None:
+        body = ResetRequest()
     session_id = body.session_id or str(uuid.uuid4())
     env = APClerkEnvironment()
     try:
