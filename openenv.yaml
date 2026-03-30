@@ -1,0 +1,91 @@
+name: ap-clerk-env
+version: "2.0.0"
+description: >
+  AI Accounts Payable Clerk — Three-Way Invoice Matching Environment.
+  An agent must cross-reference vendor invoices against company Purchase Orders
+  and warehouse Goods Receipt Notes, apply policy rules, and decide whether to
+  approve, partially approve, or reject each invoice for payment.
+  Six fully randomised tasks across easy / medium / hard difficulty levels.
+
+author: "Pathikreet"
+tags:
+  - finance
+  - enterprise
+  - reasoning
+  - arithmetic
+  - policy-compliance
+  - openenv
+
+tasks:
+  - id: easy_perfect_match
+    name: "Perfect Three-Way Match"
+    difficulty: easy
+    expected_decision: APPROVE_FULL
+    target_score: 1.0
+
+  - id: easy_no_po_found
+    name: "No Purchase Order Found"
+    difficulty: easy
+    expected_decision: REJECT
+    target_score: 1.0
+
+  - id: medium_quantity_shortfall
+    name: "Quantity Shortfall Reconciliation"
+    difficulty: medium
+    expected_decision: APPROVE_PARTIAL
+    target_score: 1.0
+
+  - id: medium_price_discrepancy
+    name: "Unit Price Discrepancy"
+    difficulty: medium
+    expected_decision: REJECT
+    target_score: 1.0
+
+  - id: hard_policy_violation
+    name: "Policy Violation — Unauthorized Freight Charge"
+    difficulty: hard
+    expected_decision: REJECT
+    target_score: 1.0
+
+  - id: hard_duplicate_invoice
+    name: "Duplicate Invoice Detection"
+    difficulty: hard
+    expected_decision: REJECT
+    target_score: 1.0
+
+action_space:
+  type: APAction
+  fields:
+    decision:        { type: enum, values: [APPROVE_FULL, APPROVE_PARTIAL, REJECT] }
+    approved_amount: { type: float, range: [0.0, inf] }
+    reason_code:     { type: enum, values: [MATCH_CONFIRMED, QUANTITY_MISMATCH,
+                       PRICE_DISCREPANCY, POLICY_VIOLATION, NO_PO_FOUND, DUPLICATE_INVOICE] }
+    explanation:     { type: string, min_length: 10, max_length: 600 }
+
+observation_space:
+  type: APObservation
+  fields:
+    task_id:          string
+    task_name:        string
+    task_description: string
+    invoice:          Invoice
+    purchase_orders:  List[PurchaseOrder]
+    goods_receipts:   List[GoodsReceipt]
+    paid_invoice_ids: List[string]
+    company_policy:   string
+    step_count:       int
+    max_steps:        int
+
+reward_range: [0.0, 1.0]
+reward_type: APReward
+reward_partial_credit: true
+episode_termination: single_step
+randomised: true
+seed_support: true
+
+endpoints:
+  reset:  "POST /reset"
+  step:   "POST /step"
+  state:  "GET  /state"
+  tasks:  "GET  /tasks"
+  health: "GET  /health"
