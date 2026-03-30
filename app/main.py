@@ -139,3 +139,8 @@ async def state(session_id: str):
 async def generic_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error: %s", exc)
     return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+def start():
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=7860, workers=1)
