@@ -282,6 +282,28 @@ All three are required. `inference.py` will exit with a clear error message if a
 
 ---
 
+## Baseline Scores
+
+Run with `Qwen/Qwen2.5-72B-Instruct` via the HuggingFace inference router, varied seeds:
+
+| Task | Difficulty | Decision | Amount | Score |
+|---|---|---|---|---|
+| `easy_perfect_match` | easy | APPROVE_FULL | invoice total | 1.000 |
+| `easy_no_po_found` | easy | REJECT | $0.00 | 1.000 |
+| `medium_quantity_shortfall` | medium | APPROVE_PARTIAL | received × unit price | 1.000 |
+| `medium_price_discrepancy` | medium | REJECT | $0.00 | 1.000 |
+| `medium_split_delivery` | medium | APPROVE_FULL | sum of both GRNs × unit price | 1.000 |
+| `medium_vendor_mismatch` | medium | REJECT | $0.00 | 1.000 |
+| `hard_policy_violation` | hard | ESCALATE → REJECT | $0.00 | 1.000 |
+| `hard_duplicate_invoice` | hard | QUERY_VENDOR → REJECT | $0.00 | 1.000 |
+| `hard_partial_po_match` | hard | APPROVE_PARTIAL | PO-covered lines only | 1.000 |
+| `hard_tax_discrepancy` | hard | REJECT | $0.00 | 1.000 |
+| **Mean** | | | | **1.000** |
+
+Hard tasks (`hard_policy_violation`, `hard_duplicate_invoice`) include a +0.05 process bonus for using the correct intermediate step (ESCALATE / QUERY_VENDOR) before the final decision. An agent that skips straight to REJECT scores 0.800 on those tasks.
+
+---
+
 ## Design Notes
 
 **Why randomised policy thresholds:** Real AP policy documents change. A new audit year brings different freight caps, updated tax rules, revised price tolerance bands. An agent trained on fixed "$50" rules fails the moment the policy changes. By randomising freight caps ($30–$100) and price tolerances (0.5%–3%) per episode, the environment forces the agent to read and apply the policy as written — not to recall a memorised number.
