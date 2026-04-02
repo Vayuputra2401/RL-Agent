@@ -7,3 +7,5 @@ results.json
 *.egg-info/
 dist/
 build/
+/inference script
+SUBMISSION.md

@@ -224,19 +224,46 @@ def run_task(task_id: str, seed: int = None) -> dict:
     obs  = env.reset(task_id, seed=seed)
     done = False
     reward = None
+    step_num = 0
+    max_steps = obs.max_steps
+    raw_response = ""
+    action = None
 
-    while not done:
+    # [START] — episode start log (matches sample: "Episode goal: ...")
+    print(f"Episode goal: {obs.task_description}")
+
+    while not done and step_num < max_steps:
         raw_response = call_llm(build_user_prompt(obs))
         action = parse_action(raw_response)
         if action is None:
-            print(f"  [WARN] Could not parse model output for {task_id}. Using fallback.")
             action = APAction(
                 decision=DecisionType.REJECT,
                 approved_amount=0.0,
                 reason_code=ReasonCode.NO_PO_FOUND,
                 explanation="Unable to parse response; defaulting to safe rejection.",
             )
+
+        action_str = f"{action.decision.value} (${action.approved_amount:.2f})"
+        step_num += 1
+
+        # [STEP] — before step log (matches sample: "Step N: model suggested → ...")
+        print(f"Step {step_num}: model suggested → {action_str}")
+
         obs, reward, done, info = env.step(action)
+
+        # [STEP] — after step log (matches sample: "  Reward: ... | Done: ... | Last action error: ...")
+        print(
+            f"  Reward: {reward.score:+.2f} | Done: {done} | Last action error: None"
+        )
+
+        if done:
+            break
+
+    # [END] — episode end log (matches sample: "Episode complete." or "Reached max steps (N).")
+    if done:
+        print("Episode complete.")
+    else:
+        print(f"Reached max steps ({max_steps}).")
 
     return {
         "task_id":         task_id,
