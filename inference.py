@@ -30,16 +30,12 @@ from openai import OpenAI
 from app import APClerkEnvironment, APAction, DecisionType, ReasonCode
 from app.tasks import TASKS
 
-API_BASE_URL: str = os.getenv("API_BASE_URL", "")
-MODEL_NAME:   str = os.getenv("MODEL_NAME",   "")
+API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME:   str = os.getenv("MODEL_NAME",   "Qwen/Qwen2.5-72B-Instruct")
 API_KEY:      str = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
 
-_missing = [k for k, v in [("API_BASE_URL", API_BASE_URL),
-                             ("MODEL_NAME",   MODEL_NAME),
-                             ("HF_TOKEN",     API_KEY)] if not v]
-if _missing:
-    for m in _missing:
-        print(f"ERROR: required environment variable '{m}' is not set.", file=sys.stderr)
+if not API_KEY:
+    print("ERROR: required environment variable 'HF_TOKEN' is not set.", file=sys.stderr)
     sys.exit(1)
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
