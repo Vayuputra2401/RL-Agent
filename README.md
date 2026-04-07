@@ -15,158 +15,130 @@ tags:
 
 # AP Clerk Environment
 
-**OpenEnv Hackathon Submission — AI Accounts Payable Clerk: Three-Way Invoice Matching**
+A reinforcement learning environment that simulates an Accounts Payable clerk performing three-way invoice matching. Given a vendor invoice, a set of Purchase Orders, and warehouse Goods Receipt Notes, an agent must cross-reference the documents, read the company policy, and decide whether to approve, partially approve, or reject the invoice for payment.
 
-An RL training environment where an agent learns to act as a corporate Accounts Payable clerk. Given a vendor invoice, Purchase Orders, and Goods Receipt Notes, the agent must cross-reference all documents, apply free-text company policy, and decide whether to approve, partially approve, or reject the invoice for payment.
-
-Three-way invoice matching is a mandatory control in every company that purchases goods. It prevents overpayments, duplicate payments, and policy violations before money leaves the organisation. This environment models that process faithfully across ten distinct task types with four major environment upgrades over the baseline.
+Three-way invoice matching is a standard financial control used by companies to prevent overpayments, duplicate payments, and policy violations before money leaves the organisation.
 
 ---
 
-## Environment Overview
+## Goal
 
-### Episode Flow — Single-step tasks
+The agent receives a set of documents and must produce a payment decision:
+
+- **APPROVE_FULL** — all documents agree, pay the full invoice amount
+- **APPROVE_PARTIAL** — partial match, pay only for what was received
+- **REJECT** — mismatch, policy violation, or unresolvable discrepancy
+
+For complex cases, the agent can take an intermediate step first (ESCALATE, QUERY_VENDOR, HOLD) to reveal additional context before making the final call.
+
+---
+
+## How an Episode Works
+
+### Single-step tasks
 
 ```
-POST /reset  { "task_id": "...", "seed": 42 }
-  → { "observation": { invoice, purchase_orders, goods_receipts, company_policy, ... }, "session_id": "uuid" }
+POST /reset  { "task_id": "easy_perfect_match", "seed": 42 }
+→ observation: invoice, purchase_orders, goods_receipts, company_policy
 
-POST /step   { "session_id": "uuid", "action": { decision, approved_amount, reason_code, explanation } }
-  → { "reward": { "score": 0.0–1.0, "breakdown": {...}, "feedback": "..." }, "done": true }
+POST /step   { "session_id": "...", "action": { decision, approved_amount, reason_code, explanation } }
+→ reward: { score, breakdown, feedback }, done: true
 ```
 
-### Episode Flow — Multi-step tasks (hard_policy_violation, hard_duplicate_invoice)
+### Multi-step tasks
 
 ```
 POST /reset  → observation (max_steps: 3)
-POST /step   { "action": { "decision": "ESCALATE", ... } }  → done: false, context_notes revealed
-POST /step   { "action": { "decision": "REJECT", ... } }    → done: true, score: 1.0 + process bonus
+POST /step   { action: { decision: "ESCALATE", ... } }   → done: false, context_notes revealed
+POST /step   { action: { decision: "REJECT", ... } }     → done: true, score awarded
 ```
 
-Intermediate actions (ESCALATE, QUERY_VENDOR, HOLD) are optional. The agent can go straight to a terminal decision — it just misses the process bonus for proper verification protocol.
+The agent can skip the intermediate step and go straight to a terminal decision — it just misses the small process bonus for following proper verification procedure.
 
 ---
 
-## What Makes This Environment Hard (v2 Improvements)
+## What the Agent Sees (Observation)
 
-### 1. Randomised Policy Per Episode
-Freight caps ($30–$100) and price tolerance thresholds (0.5%–3%) vary with each seed. The agent cannot hardcode "$50" — it must read the `company_policy` field every time and extract the actual threshold. This tests genuine policy comprehension, not memorisation.
+| Field | Description |
+|---|---|
+| `invoice` | Vendor bill: line items, quantities, unit prices, freight charge, tax amount, total |
+| `purchase_orders` | All POs in the system — includes CLOSED historical ones; only OPEN POs authorise payment |
+| `goods_receipts` | Warehouse receipts — may include GRNs for other POs; match by `po_number` |
+| `paid_invoice_ids` | Invoice IDs already settled — used in duplicate-detection tasks |
+| `company_policy` | Plain-text policy document with episode-specific thresholds (freight cap, price tolerance) |
+| `step_count` / `max_steps` | Episode progress |
+| `action_history` | Prior actions taken this episode |
+| `context_notes` | Responses revealed by intermediate actions |
 
-### 2. Distractor Documents
-Every episode includes 1–2 CLOSED historical POs from other vendors and occasionally GRNs referencing different POs. The agent must identify the relevant documents (OPEN status, matching vendor, matching PO number) and ignore the noise — exactly as a real AP clerk does in enterprise ERP systems.
-
-### 3. Multi-Step Episodes
-Hard tasks support up to 3 steps. An ESCALATE or QUERY_VENDOR action reveals pre-generated manager/vendor responses in `context_notes`. The grader awards a small process bonus for agents that correctly verify before deciding — incentivising proper AP procedure over lucky guessing.
-
-### 4. Harder Graders
-- Stricter partial credit: wrong decisions score lower (REJECT on a shortfall: 0.15 not 0.35)
-- Tighter amount tolerance curves (1% for full credit, 3% for partial, 8% near-zero)
-- Higher explanation keyword thresholds (3–4 hits required vs 2)
-- Dynamic keyword matching: graders check for the episode-specific cap value, not a hardcoded "$50"
+Every episode is randomised from a seed. Freight caps ($30–$100) and price tolerances (0.5%–3%) vary per episode, so the agent must read the policy each time.
 
 ---
 
-## Action Space
-
-**Type:** `APAction`
-
-| Field | Type | Constraint | Description |
-|---|---|---|---|
-| `decision` | enum | see below | Payment verdict or intermediate step |
-| `approved_amount` | float | ≥ 0.0 | Dollar amount to pay. Must be 0.0 if decision is REJECT. |
-| `reason_code` | enum | see below | Diagnostic classification of the decision |
-| `explanation` | string | 10–600 chars | Plain-English justification the agent must provide |
-
-**Terminal decisions** (end the episode):
-
-| Decision | When to use |
-|---|---|
-| `APPROVE_FULL` | All documents match; pay the full invoice total |
-| `APPROVE_PARTIAL` | Partial match; pay only for what was received/authorised |
-| `REJECT` | Policy violation, mismatch, or unresolvable discrepancy |
-
-**Intermediate decisions** (multi-step; episode continues, context revealed):
-
-| Decision | When to use |
-|---|---|
-| `QUERY_VENDOR` | Request vendor clarification before deciding |
-| `ESCALATE` | Escalate to Finance Manager for complex policy questions |
-| `HOLD` | Place invoice on hold pending further information |
-
-**Reason codes:**
-
-| Code | When to use |
-|---|---|
-| `MATCH_CONFIRMED` | All three documents agree, payment is clean |
-| `QUANTITY_MISMATCH` | GRN shows fewer units received than invoiced |
-| `PRICE_DISCREPANCY` | Invoice unit price differs from agreed PO price beyond tolerance |
-| `POLICY_VIOLATION` | A company policy rule is breached (freight cap, unauthorised charge) |
-| `NO_PO_FOUND` | No valid OPEN Purchase Order exists for this invoice |
-| `DUPLICATE_INVOICE` | This invoice ID has already been paid |
-| `VENDOR_MISMATCH` | Invoice vendor name does not match PO vendor name |
-| `TAX_DISCREPANCY` | Invoice includes tax not authorised in the PO |
-| `PENDING_CLARIFICATION` | Awaiting vendor response (for intermediate steps) |
-| `MANAGER_REVIEW` | Escalated to Finance Manager (for intermediate steps) |
-
----
-
-## Observation Space
-
-**Type:** `APObservation`
+## What the Agent Does (Action)
 
 | Field | Type | Description |
 |---|---|---|
-| `task_id` / `task_name` | string | Identifies the active task |
-| `task_description` | string | Plain-English description of the scenario |
-| `invoice` | `Invoice` | Vendor bill: line items, freight charge, tax amount, invoice total |
-| `purchase_orders` | `List[PurchaseOrder]` | All POs in system — includes CLOSED distractors; only OPEN ones authorise payment |
-| `goods_receipts` | `List[GoodsReceipt]` | Warehouse receipts — includes GRNs for other POs; match by `po_number` |
-| `paid_invoice_ids` | `List[str]` | Invoice IDs already settled — populated in duplicate-detection tasks |
-| `company_policy` | string | Free-text policy document with episode-specific thresholds |
-| `step_count` / `max_steps` | int | Episode progress. max_steps > 1 for multi-step tasks. |
-| `freight_cap` | float | Episode-specific freight cap (also stated in company_policy) |
-| `price_tolerance` | float | Episode-specific price tolerance (also stated in company_policy) |
-| `action_history` | `List[dict]` | Prior actions taken this episode (populated during multi-step) |
-| `context_notes` | `List[str]` | Responses revealed by ESCALATE / QUERY_VENDOR intermediate actions |
+| `decision` | enum | Payment verdict (see below) |
+| `approved_amount` | float | Dollar amount to pay. Must be 0.0 if REJECT. |
+| `reason_code` | enum | Classification of the decision (see below) |
+| `explanation` | string | Plain-English justification (10–600 chars) |
 
-**Invoice** also includes `tax_amount: float` (non-zero in `hard_tax_discrepancy`).
+**Terminal decisions:**
+
+| Decision | When |
+|---|---|
+| `APPROVE_FULL` | Invoice, PO, and GRN all match |
+| `APPROVE_PARTIAL` | Partial match — pay only for what was received or authorised |
+| `REJECT` | Policy violation, mismatch, no PO, duplicate |
+
+**Intermediate decisions** (multi-step tasks, episode continues):
+
+| Decision | When |
+|---|---|
+| `ESCALATE` | Escalate to Finance Manager |
+| `QUERY_VENDOR` | Request vendor clarification |
+| `HOLD` | Place invoice on hold |
+
+**Reason codes:**
+
+`MATCH_CONFIRMED` / `QUANTITY_MISMATCH` / `PRICE_DISCREPANCY` / `POLICY_VIOLATION` / `NO_PO_FOUND` / `DUPLICATE_INVOICE` / `VENDOR_MISMATCH` / `TAX_DISCREPANCY` / `PENDING_CLARIFICATION` / `MANAGER_REVIEW`
 
 ---
 
 ## Tasks
 
-Ten randomised tasks across three difficulty levels. Each call to `/reset` with a new `seed` generates a different invoice, vendor, product, quantities, prices, and policy thresholds. The agent cannot memorise answers — it must reason from documents on every episode.
+Ten tasks across three difficulty levels. Each call to `/reset` with a different `seed` produces a different invoice, vendor, product, quantities, prices, and policy thresholds.
 
 ### Easy
 
 | Task ID | What the agent must do |
 |---|---|
-| `easy_perfect_match` | Verify that the invoice, OPEN PO, and GRN all agree (ignoring CLOSED distractors), then approve the full amount. |
-| `easy_no_po_found` | Recognise that no OPEN PO exists for the invoice reference and reject immediately. |
+| `easy_perfect_match` | Verify invoice, PO, and GRN all agree, then approve full amount |
+| `easy_no_po_found` | Recognise there is no OPEN PO for this invoice and reject |
 
 ### Medium
 
 | Task ID | What the agent must do |
 |---|---|
-| `medium_quantity_shortfall` | Calculate the correct payable amount based on GRN-confirmed quantities only, then partial-approve. |
-| `medium_price_discrepancy` | Detect that the invoice unit price deviates from the agreed PO price beyond the episode-specific tolerance and reject. |
-| `medium_split_delivery` | Sum quantities across two GRNs for the same PO (split shipment) and approve the full amount. |
-| `medium_vendor_mismatch` | Identify that the invoice vendor name differs subtly from the PO vendor and reject per policy. |
+| `medium_quantity_shortfall` | Calculate payable amount from GRN-confirmed quantities only and partial-approve |
+| `medium_price_discrepancy` | Detect invoice unit price exceeds agreed PO price beyond tolerance and reject |
+| `medium_split_delivery` | Sum quantities across two GRNs for the same PO and approve full amount |
+| `medium_vendor_mismatch` | Identify subtle vendor name mismatch between invoice and PO and reject |
 
 ### Hard
 
 | Task ID | What the agent must do | max_steps |
 |---|---|---|
-| `hard_policy_violation` | Identify that freight exceeds the episode-specific cap. Optionally ESCALATE for Finance Manager confirmation before rejecting. | 3 |
-| `hard_duplicate_invoice` | Recognise the invoice ID in the paid ledger. Optionally QUERY_VENDOR before rejecting. | 3 |
-| `hard_partial_po_match` | Invoice has two line items; only one is covered by the PO. Partial-approve for the authorised amount only. | 1 |
-| `hard_tax_discrepancy` | Vendor adds a tax charge not in the PO. Detect and reject. | 1 |
+| `hard_policy_violation` | Freight charge exceeds episode-specific cap; optionally escalate before rejecting | 3 |
+| `hard_duplicate_invoice` | Invoice ID is already in the paid ledger; optionally query vendor before rejecting | 3 |
+| `hard_partial_po_match` | Only one of two invoice line items is covered by the PO; partial-approve for covered lines only | 1 |
+| `hard_tax_discrepancy` | Invoice includes a tax charge not in the PO; reject | 1 |
 
 ---
 
-## Reward Design
+## Grading
 
-Rewards are partial and multi-dimensional. Each grader decomposes the score across weighted sub-components so that an agent making the right decision with slightly wrong arithmetic still receives a meaningful learning signal.
+Scores are partial and broken down across components so near-correct decisions still produce a useful learning signal.
 
 | Task | Score formula |
 |---|---|
@@ -178,73 +150,66 @@ Rewards are partial and multi-dimensional. Each grader decomposes the score acro
 | `medium_vendor_mismatch` | 50% decision + 25% reason code + 15% explanation + 10% amount zero |
 | `hard_policy_violation` | 48% decision + 27% reason code + 20% explanation + 5% process bonus |
 | `hard_duplicate_invoice` | 48% decision + 27% reason code + 20% explanation + 5% process bonus |
-| `hard_partial_po_match` | 45% decision + 38% amount (PO-covered only) + 12% reason code + 5% explanation |
+| `hard_partial_po_match` | 45% amount (PO-covered lines only) + 38% decision + 12% reason code + 5% explanation |
 | `hard_tax_discrepancy` | 50% decision + 30% reason code + 20% explanation |
 
-**Amount accuracy tiers** (for tasks with partial-credit on amount):
-- Within 1%: full credit (1.0)
+**Amount accuracy tiers** (for tasks that partially score the approved amount):
+- Within 1%: full credit
 - Within 3%: 0.60–0.65
 - Within 8%: 0.30–0.40
 - Beyond 8%: near zero
 
-**Process bonus** (multi-step tasks only): +0.05 if agent uses the correct intermediate step (ESCALATE / QUERY_VENDOR) before making the right terminal decision.
+**Process bonus** (multi-step tasks only): +0.05 added if the agent uses the correct intermediate step before the right terminal decision. An agent that skips straight to REJECT on those tasks scores ~0.80 instead of ~0.85.
+
+All scores are in the open interval (0.01, 0.99).
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Health check |
+| `/tasks` | GET | List all tasks with difficulty metadata |
+| `/reset` | POST | Start a new episode, returns observation + session_id |
+| `/step` | POST | Submit an action, returns reward + done |
+| `/state` | GET | Current session state |
+| `/docs` | GET | Swagger UI |
+
+`seed` in `/reset` is optional. Omit for a random episode, or pass a fixed integer for a reproducible one.
 
 ---
 
 ## Project Structure
 
 ```
-ap-clerk-env/
-├── Dockerfile            # Container definition for HF Spaces (port 7860)
-├── README.md             # This file
-├── openenv.yaml          # OpenEnv spec: tasks, action space, observation space, endpoints
-├── inference.py          # Baseline agent — multi-step loop, writes results.json
-├── validate.py           # Pre-submission validator — run locally before deploying
-├── requirements.txt      # Python dependencies
+├── Dockerfile            # Container definition (port 7860)
+├── README.md
+├── openenv.yaml          # Environment spec: tasks, action space, endpoints
+├── inference.py          # Baseline agent — runs all 10 tasks, writes results.json
+├── validate.py           # Local pre-submit validator
+├── requirements.txt
 └── app/
-    ├── __init__.py
-    ├── main.py           # FastAPI server — /reset /step /state /tasks /health
-    ├── models.py         # Pydantic typed models — Observation, Action, Reward
-    ├── tasks.py          # Task generators (randomised) and graders (deterministic)
-    └── environment.py    # APClerkEnvironment — reset() / step() / state()
+    ├── main.py           # FastAPI server
+    ├── models.py         # Pydantic models: Observation, Action, Reward
+    ├── tasks.py          # Task generators and graders
+    └── environment.py    # APClerkEnvironment: reset() / step() / state()
 ```
-
----
-
-## API Reference
-
-| Endpoint | Method | Body / Params | Returns |
-|---|---|---|---|
-| `/health` | GET | — | `{"status": "ok"}` |
-| `/tasks` | GET | — | List of all 10 tasks with difficulty metadata |
-| `/reset` | POST | `{"task_id": "...", "seed": 42}` | Observation + session_id |
-| `/step` | POST | `{"session_id": "...", "action": {...}}` | Reward (score, breakdown, feedback) + done |
-| `/state` | GET | `?session_id=...` | Current session state |
-| `/docs` | GET | — | Swagger UI |
-
-`seed` in `/reset` is optional. Omit for a random episode, or pass a fixed integer for reproducible episodes.
 
 ---
 
 ## Setup
 
-### Requirements
-
-- Python 3.10, 3.11, or 3.12
-- Hugging Face account with an API token (free tier is sufficient)
-
-### Install and run locally
+### Run locally
 
 ```bash
-git clone https://huggingface.co/spaces/Pathikreet/ap-clerk-env
-cd ap-clerk-env
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
 ```
 
-Open `http://localhost:7860/docs` for the interactive API documentation.
+Open `http://localhost:7860/docs` for the interactive API docs.
 
-### Run baseline inference
+### Run inference
 
 ```bash
 export HF_TOKEN="hf_..."
@@ -253,7 +218,7 @@ export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 python inference.py
 ```
 
-Scores are printed per task and written to `results.json`. The inference script handles multi-step episodes automatically — it loops until `done=True`.
+Scores are printed per task and written to `results.json`.
 
 ### Run with Docker
 
@@ -262,58 +227,12 @@ docker build -t ap-clerk-env .
 docker run -p 7860:7860 ap-clerk-env
 ```
 
-### Validate before submitting
-
-```bash
-python validate.py
-```
-
 ---
 
 ## Environment Variables
 
-All three are required. `inference.py` will exit with a clear error message if any are missing.
-
-| Variable | Description |
-|---|---|
-| `HF_TOKEN` | Hugging Face API token, used as the LLM API key |
-| `API_BASE_URL` | OpenAI-compatible endpoint, e.g. `https://router.huggingface.co/v1` |
-| `MODEL_NAME` | Model identifier, e.g. `Qwen/Qwen2.5-72B-Instruct` |
-
----
-
-## Baseline Scores
-
-Run with `Qwen/Qwen2.5-72B-Instruct` via the HuggingFace inference router, varied seeds:
-
-| Task | Difficulty | Decision | Amount | Score |
-|---|---|---|---|---|
-| `easy_perfect_match` | easy | APPROVE_FULL | invoice total | 1.000 |
-| `easy_no_po_found` | easy | REJECT | $0.00 | 1.000 |
-| `medium_quantity_shortfall` | medium | APPROVE_PARTIAL | received × unit price | 1.000 |
-| `medium_price_discrepancy` | medium | REJECT | $0.00 | 1.000 |
-| `medium_split_delivery` | medium | APPROVE_FULL | sum of both GRNs × unit price | 1.000 |
-| `medium_vendor_mismatch` | medium | REJECT | $0.00 | 1.000 |
-| `hard_policy_violation` | hard | ESCALATE → REJECT | $0.00 | 1.000 |
-| `hard_duplicate_invoice` | hard | QUERY_VENDOR → REJECT | $0.00 | 1.000 |
-| `hard_partial_po_match` | hard | APPROVE_PARTIAL | PO-covered lines only | 1.000 |
-| `hard_tax_discrepancy` | hard | REJECT | $0.00 | 1.000 |
-| **Mean** | | | | **1.000** |
-
-Hard tasks (`hard_policy_violation`, `hard_duplicate_invoice`) include a +0.05 process bonus for using the correct intermediate step (ESCALATE / QUERY_VENDOR) before the final decision. An agent that skips straight to REJECT scores 0.800 on those tasks.
-
----
-
-## Design Notes
-
-**Why randomised policy thresholds:** Real AP policy documents change. A new audit year brings different freight caps, updated tax rules, revised price tolerance bands. An agent trained on fixed "$50" rules fails the moment the policy changes. By randomising freight caps ($30–$100) and price tolerances (0.5%–3%) per episode, the environment forces the agent to read and apply the policy as written — not to recall a memorised number.
-
-**Why distractor documents:** Enterprise ERP systems contain thousands of POs — OPEN, CLOSED, cancelled, from dozens of vendors. A real AP clerk must filter to the relevant OPEN PO from the correct vendor. Training on environments with exactly one PO teaches agents to always approve the first document they see. Distractors teach selective attention.
-
-**Why multi-step episodes:** Complex policy cases in real enterprises require consultation. A freight charge question may need Finance Manager sign-off before the clerk can proceed. By allowing ESCALATE/QUERY_VENDOR intermediate steps that reveal additional context, the environment rewards systematic verification — not just lucky one-shot guessing.
-
-**Why partial rewards:** A sparse 0/1 reward destroys gradient signal for near-correct agents. An agent that correctly identifies a quantity shortfall but calculates the payable amount 3% low should learn something from that episode. The weighted breakdown makes the reward surface continuous and learnable.
-
-**Why free-text policy:** Real company policy documents are Word files and PDFs written in natural language. The hard tasks require the agent to read a plain-English policy string and extract a precise numeric rule — the same challenge enterprise AI faces in production.
-
-**Why harder graders (v2):** The original graders were too generous, giving 0.35 credit for REJECT on a shortfall that should be partial-approved. Hard graders with tighter tolerances and higher keyword thresholds ensure only agents that genuinely understand the task score well. Partial credit still exists but requires more precision.
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `HF_TOKEN` | Yes | — | Hugging Face API token |
+| `API_BASE_URL` | No | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint |
+| `MODEL_NAME` | No | `Qwen/Qwen2.5-72B-Instruct` | Model identifier |
