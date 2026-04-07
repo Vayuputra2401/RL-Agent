@@ -4,7 +4,7 @@ All OpenEnv-required models: Observation, Action, Reward.
 """
 
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
@@ -107,10 +107,15 @@ class APObservation(BaseModel):
 # ── Reward model ──────────────────────────────────────────────────────────────
 
 class APReward(BaseModel):
-    score: float = Field(ge=0.0, le=1.0)  # clamped to (0.01, 0.99) by environment
+    score: float = Field(ge=0.01, le=0.99)
     breakdown: Dict[str, Any]
     feedback: str
     done: bool = True
+
+    @field_validator("score", mode="before")
+    @classmethod
+    def clamp_score(cls, v: float) -> float:
+        return max(0.01, min(0.99, float(v)))
 
 
 # ── API wrappers ──────────────────────────────────────────────────────────────
