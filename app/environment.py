@@ -139,6 +139,14 @@ class APClerkEnvironment:
         })
 
         reward               = grade_action(self._task_id, self._observation, action)
+        # Clamp to open interval (0, 1) as required by the evaluator
+        clamped_score        = max(0.01, min(0.99, reward.score))
+        reward               = APReward(
+            score=clamped_score,
+            breakdown=reward.breakdown,
+            feedback=reward.feedback,
+            done=reward.done,
+        )
         self._done           = True
         self._episode_score  = reward.score
         self._observation.step_count = self._step_count

@@ -107,7 +107,7 @@ class APObservation(BaseModel):
 # ── Reward model ──────────────────────────────────────────────────────────────
 
 class APReward(BaseModel):
-    score: float = Field(ge=0.0, le=1.0)
+    score: float = Field(ge=0.0, le=1.0)  # clamped to (0.01, 0.99) by environment
     breakdown: Dict[str, Any]
     feedback: str
     done: bool = True
