@@ -254,7 +254,7 @@ def run_task(task_id: str, seed: int = None) -> dict:
         if done:
             break
 
-    success_str  = "true" if (reward is not None and reward.score > 0) else "false"
+    success_str  = "true" if (reward is not None and reward.score >= 0.5) else "false"
     rewards_str  = ",".join(f"{r:.2f}" for r in step_rewards)
     print(f"[END] success={success_str} steps={step_num} rewards={rewards_str}", flush=True)
 
@@ -297,8 +297,9 @@ def main():
             print(f"  Feedback : {result['feedback'][:120]}")
             print(f"  Time     : {elapsed:.1f}s")
         except Exception as exc:
+            print(f"[END] success=false steps=0 rewards=0.01", flush=True)
             print(f"  ERROR: {exc}")
-            results.append({"task_id": task_id, "score": 0.0, "error": str(exc)})
+            results.append({"task_id": task_id, "score": 0.01, "error": str(exc)})
 
     mean_score = total_score / len(task_ids)
     print("\n" + "=" * 65)
