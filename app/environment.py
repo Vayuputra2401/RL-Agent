@@ -109,7 +109,7 @@ class APClerkEnvironment:
                 if self._observation.context_notes else None
 
             reward = APReward(
-                score=0.0,
+                score=0.01,
                 breakdown={
                     "intermediate_step": action.decision.value,
                     "steps_remaining":   steps_left,
