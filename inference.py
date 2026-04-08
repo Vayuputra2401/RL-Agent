@@ -52,11 +52,13 @@ SYSTEM_PROMPT = textwrap.dedent("""
 
     JSON schema:
     {
-      "decision":        "APPROVE_FULL" | "APPROVE_PARTIAL" | "REJECT",
-      "approved_amount": <float — dollar amount to pay, 0.0 if REJECT>,
+      "decision":        "APPROVE_FULL" | "APPROVE_PARTIAL" | "REJECT" |
+                         "ESCALATE" | "QUERY_VENDOR" | "HOLD",
+      "approved_amount": <float — dollar amount to pay, 0.0 if REJECT/ESCALATE/QUERY_VENDOR/HOLD>,
       "reason_code":     "MATCH_CONFIRMED" | "QUANTITY_MISMATCH" | "PRICE_DISCREPANCY" |
                          "POLICY_VIOLATION" | "NO_PO_FOUND" | "DUPLICATE_INVOICE" |
-                         "VENDOR_MISMATCH" | "TAX_DISCREPANCY",
+                         "VENDOR_MISMATCH" | "TAX_DISCREPANCY" |
+                         "PENDING_CLARIFICATION" | "MANAGER_REVIEW",
       "explanation":     "<10–500 char plain-English justification>"
     }
 
@@ -66,6 +68,18 @@ SYSTEM_PROMPT = textwrap.dedent("""
       pay only for what was received and authorised.
     - REJECT: Policy violation, no PO, vendor name mismatch, tax discrepancy,
       duplicate invoice, or unresolvable discrepancy; do not pay.
+    - ESCALATE: Use when freight exceeds policy cap or there is a complex policy question
+      requiring Finance Manager sign-off before you can decide. Use MANAGER_REVIEW reason code.
+      The environment will reveal the Finance Manager's response in the next step.
+    - QUERY_VENDOR: Use when the invoice appears to be a duplicate and you want vendor
+      confirmation before rejecting. Use PENDING_CLARIFICATION reason code.
+      The environment will reveal the vendor's response in the next step.
+
+    Multi-step guidance:
+    - If max_steps > 1 AND the task involves a freight policy violation, use ESCALATE first.
+    - If max_steps > 1 AND the task involves a possible duplicate invoice, use QUERY_VENDOR first.
+    - After receiving context_notes from the intermediate step, make your final terminal decision.
+    - Single-step tasks (max_steps = 1): go straight to APPROVE_FULL / APPROVE_PARTIAL / REJECT.
 
     Mandatory checks before deciding:
     1. Is there a valid OPEN Purchase Order matching the invoice PO reference?
