@@ -208,7 +208,7 @@ def grade_easy_perfect(obs: APObservation, action: APAction) -> APReward:
     else:
         reason_score = 0.2
 
-    final = round(0.50 * decision_score + 0.35 * amount_score + 0.15 * reason_score, 3)
+    final = max(0.01, min(0.99, round(0.50 * decision_score + 0.35 * amount_score + 0.15 * reason_score, 3)))
 
     parts = []
     if decision_score < 1.0:
@@ -274,7 +274,7 @@ def grade_easy_no_po(obs: APObservation, action: APAction) -> APReward:
                       0.3 if action.reason_code == ReasonCode.POLICY_VIOLATION else 0.05)
     amount_score   = 1.0 if action.approved_amount == 0.0 else 0.0
 
-    final = round(0.60 * decision_score + 0.30 * reason_score + 0.10 * amount_score, 3)
+    final = max(0.01, min(0.99, round(0.60 * decision_score + 0.30 * reason_score + 0.10 * amount_score, 3)))
 
     parts = []
     if decision_score < 1.0:
@@ -374,7 +374,7 @@ def grade_medium_shortfall(obs: APObservation, action: APAction) -> APReward:
     reason_score = (1.0 if action.reason_code == ReasonCode.QUANTITY_MISMATCH else
                     0.3 if action.reason_code == ReasonCode.POLICY_VIOLATION else 0.05)
 
-    final = round(0.45 * decision_score + 0.40 * amount_score + 0.15 * reason_score, 3)
+    final = max(0.01, min(0.99, round(0.45 * decision_score + 0.40 * amount_score + 0.15 * reason_score, 3)))
 
     parts = []
     if action.decision == DecisionType.APPROVE_FULL:
@@ -461,7 +461,7 @@ def grade_medium_price(obs: APObservation, action: APAction) -> APReward:
     hits       = sum(1 for kw in price_kws if kw in expl)
     expl_score = min(1.0, hits / 3)   # harder: need 3 hits
 
-    final = round(0.55 * decision_score + 0.30 * reason_score + 0.15 * expl_score, 3)
+    final = max(0.01, min(0.99, round(0.55 * decision_score + 0.30 * reason_score + 0.15 * expl_score, 3)))
 
     parts = []
     if decision_score < 1.0:
@@ -575,10 +575,10 @@ def grade_hard_freight(obs: APObservation, action: APAction) -> APReward:
     # Multi-step process bonus: escalating before deciding shows correct AP procedure
     process_score = 0.05 if (escalated and action.decision == DecisionType.REJECT) else 0.0
 
-    final = min(1.0, round(
+    final = max(0.01, min(0.99, round(
         0.48 * decision_score + 0.27 * reason_score + 0.20 * expl_score + process_score,
         3
-    ))
+    )))
 
     parts = []
     if action.decision != DecisionType.REJECT:
@@ -677,10 +677,10 @@ def grade_hard_duplicate(obs: APObservation, action: APAction) -> APReward:
 
     process_score = 0.05 if (queried and action.decision == DecisionType.REJECT) else 0.0
 
-    final = min(1.0, round(
+    final = max(0.01, min(0.99, round(
         0.48 * decision_score + 0.27 * reason_score + 0.20 * expl_score + process_score,
         3
-    ))
+    )))
 
     parts = []
     if decision_score < 1.0:
@@ -789,7 +789,7 @@ def grade_medium_split(obs: APObservation, action: APAction) -> APReward:
     reason_score = (1.0 if action.reason_code == ReasonCode.MATCH_CONFIRMED else
                     0.40 if action.reason_code == ReasonCode.QUANTITY_MISMATCH else 0.05)
 
-    final = round(0.50 * decision_score + 0.35 * amount_score + 0.15 * reason_score, 3)
+    final = max(0.01, min(0.99, round(0.50 * decision_score + 0.35 * amount_score + 0.15 * reason_score, 3)))
 
     parts = []
     if decision_score < 1.0:
@@ -876,11 +876,11 @@ def grade_medium_vendor_mismatch(obs: APObservation, action: APAction) -> APRewa
     hits       = sum(1 for kw in vendor_kws if kw in expl)
     expl_score = min(1.0, hits / 3)
 
-    final = round(
+    final = max(0.01, min(0.99, round(
         0.50 * decision_score + 0.25 * reason_score +
         0.15 * expl_score    + 0.10 * amount_score,
         3
-    )
+    )))
 
     parts = []
     if decision_score < 1.0:
@@ -1003,11 +1003,11 @@ def grade_hard_partial_po(obs: APObservation, action: APAction) -> APReward:
     hits       = sum(1 for kw in partial_kws if kw in expl)
     expl_score = min(1.0, hits / 3)
 
-    final = round(
+    final = max(0.01, min(0.99, round(
         0.45 * decision_score + 0.38 * amount_score +
         0.12 * reason_score   + 0.05 * expl_score,
         3
-    )
+    )))
 
     parts = []
     if decision_score < 1.0:
@@ -1106,7 +1106,7 @@ def grade_hard_tax(obs: APObservation, action: APAction) -> APReward:
     hits       = sum(1 for kw in tax_kws if kw in expl)
     expl_score = min(1.0, hits / 3)
 
-    final = round(0.50 * decision_score + 0.30 * reason_score + 0.20 * expl_score, 3)
+    final = max(0.01, min(0.99, round(0.50 * decision_score + 0.30 * reason_score + 0.20 * expl_score, 3)))
 
     parts = []
     if decision_score == 0.0:
