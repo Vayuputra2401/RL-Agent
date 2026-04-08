@@ -26,61 +26,61 @@ tasks:
     name: "Perfect Three-Way Match"
     difficulty: easy
     expected_decision: APPROVE_FULL
-    target_score: 1.0
+    target_score: 0.99
 
   - id: easy_no_po_found
     name: "No Purchase Order Found"
     difficulty: easy
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
   - id: medium_quantity_shortfall
     name: "Quantity Shortfall Reconciliation"
     difficulty: medium
     expected_decision: APPROVE_PARTIAL
-    target_score: 1.0
+    target_score: 0.99
 
   - id: medium_price_discrepancy
     name: "Unit Price Discrepancy"
     difficulty: medium
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
   - id: medium_split_delivery
     name: "Split Delivery Reconciliation"
     difficulty: medium
     expected_decision: APPROVE_FULL
-    target_score: 1.0
+    target_score: 0.99
 
   - id: medium_vendor_mismatch
     name: "Vendor Name Mismatch"
     difficulty: medium
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
   - id: hard_policy_violation
     name: "Policy Violation — Unauthorized Freight Charge"
     difficulty: hard
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
   - id: hard_duplicate_invoice
     name: "Duplicate Invoice Detection"
     difficulty: hard
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
   - id: hard_partial_po_match
     name: "Partial PO Coverage"
     difficulty: hard
     expected_decision: APPROVE_PARTIAL
-    target_score: 1.0
+    target_score: 0.99
 
   - id: hard_tax_discrepancy
     name: "Unauthorized Tax Charge"
     difficulty: hard
     expected_decision: REJECT
-    target_score: 1.0
+    target_score: 0.99
 
 action_space:
   type: APAction
@@ -117,7 +117,7 @@ observation_space:
     action_history:   List[dict]
     context_notes:    List[string]
 
-reward_range: [0.0, 1.0]
+reward_range: [0.01, 0.99]
 reward_type: APReward
 reward_partial_credit: true
 episode_termination: terminal_action_or_max_steps

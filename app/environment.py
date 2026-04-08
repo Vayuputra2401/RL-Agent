@@ -48,7 +48,7 @@ class APClerkEnvironment:
         self._observation:   Optional[APObservation] = None
         self._step_count:    int                     = 0
         self._done:          bool                    = False
-        self._episode_score: float                   = 0.0
+        self._episode_score: float                   = 0.01
         self._max_steps:     int                     = 1
         self._context_store: List[str]               = []
 
@@ -62,7 +62,7 @@ class APClerkEnvironment:
         self._task_id       = task_id
         self._step_count    = 0
         self._done          = False
-        self._episode_score = 0.0
+        self._episode_score = 0.01
         self._max_steps     = spec.max_steps
 
         obs = spec.generator(seed=seed)
@@ -125,7 +125,7 @@ class APClerkEnvironment:
             info: Dict[str, Any] = {
                 "task_id":    self._task_id,
                 "step_count": self._step_count,
-                "episode_score": 0.0,
+                "episode_score": 0.01,
                 "intermediate": True,
             }
             return self._observation, reward, False, info
