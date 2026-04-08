@@ -226,7 +226,7 @@ def run_task(task_id: str, seed: int = None) -> dict:
     action = None
     step_rewards: list = []
 
-    print(f"[START] task={task_id} env=ap-clerk model={MODEL_NAME}", flush=True)
+    print(f"[START] task={task_id}", flush=True)
 
     while not done and step_num < max_steps:
         raw_response = call_llm(build_user_prompt(obs))
@@ -243,20 +243,13 @@ def run_task(task_id: str, seed: int = None) -> dict:
         obs, reward, done, info = env.step(action)
         step_rewards.append(reward.score)
 
-        done_str  = "true" if done else "false"
-        action_str = action.decision.value
-        print(
-            f"[STEP] step={step_num} action={action_str} "
-            f"reward={reward.score:.2f} done={done_str} error=null",
-            flush=True,
-        )
+        print(f"[STEP] step={step_num} reward={reward.score:.2f}", flush=True)
 
         if done:
             break
 
-    success_str  = "true" if (reward is not None and reward.score >= 0.5) else "false"
-    rewards_str  = ",".join(f"{r:.2f}" for r in step_rewards)
-    print(f"[END] success={success_str} steps={step_num} rewards={rewards_str}", flush=True)
+    final_score = step_rewards[-1] if step_rewards else 0.01
+    print(f"[END] task={task_id} score={final_score:.2f} steps={step_num}", flush=True)
 
     return {
         "task_id":         task_id,
@@ -297,7 +290,7 @@ def main():
             print(f"  Feedback : {result['feedback'][:120]}")
             print(f"  Time     : {elapsed:.1f}s")
         except Exception as exc:
-            print(f"[END] success=false steps=0 rewards=0.01", flush=True)
+            print(f"[END] task={task_id} score=0.01 steps=0", flush=True)
             print(f"  ERROR: {exc}")
             results.append({"task_id": task_id, "score": 0.01, "error": str(exc)})
 
