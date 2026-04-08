@@ -58,7 +58,7 @@ async def root():
     <html><body style="font-family:monospace;padding:2rem;background:#0f0f0f;color:#e0e0e0">
     <h1>🧾 AP Clerk Environment</h1>
     <p>OpenEnv-compatible AI Accounts Payable environment for Three-Way Invoice Matching.</p>
-    <p style="color:#aaa">6 randomised tasks &nbsp;|&nbsp; easy / medium / hard &nbsp;|&nbsp; partial-credit rewards</p>
+    <p style="color:#aaa">10 randomised tasks &nbsp;|&nbsp; easy / medium / hard &nbsp;|&nbsp; partial-credit rewards</p>
     <ul>
       <li><a href="/docs" style="color:#7fdbff">/docs</a> — Swagger UI</li>
       <li><a href="/tasks" style="color:#7fdbff">/tasks</a> — List all tasks</li>
