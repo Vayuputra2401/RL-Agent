@@ -1,27 +1,43 @@
-name: ap-clerk-env
-version: "2.1.0"
+name: ap-commander
+version: "4.0.0"
 description: >
-  AI Accounts Payable Clerk — Three-Way Invoice Matching Environment.
-  An agent must cross-reference vendor invoices against company Purchase Orders
-  and warehouse Goods Receipt Notes, apply episode-specific policy rules, and
-  decide whether to approve, partially approve, or reject each invoice for payment.
-  Ten fully randomised tasks across easy / medium / hard difficulty levels.
-  Features: randomised policy thresholds per episode, distractor documents,
-  multi-step episodes (ESCALATE / QUERY_VENDOR), and harder graders.
+  AP Commander — Multi-Agent Enterprise Financial Operations Environment.
+  A multi-agent RL environment covering all four hackathon themes:
+    Theme #1 (Multi-Agent): AP Clerk agent + Fleet AI Oversight Agent +
+      three simulated workplace actors (VendorActor, ManagerActor, ComplianceActor).
+    Theme #2 (Long-Horizon): 7 new tasks with max_steps 10-16 requiring
+      multi-step dispute resolution, batch processing, fraud investigation,
+      audit trail generation, and escalation chains.
+    Theme #3.1 (Professional World Modeling): Enterprise AP workflows with
+      ERP-like document state, dynamic policy, and multi-app actor interactions.
+    Theme #4 (Self-Improvement): Adaptive curriculum endpoint that escalates
+      task difficulty based on agent performance history; HYPOTHETICAL action
+      for counterfactual self-play exploration.
+  27 total tasks: 13 original (easy/medium/hard) + 7 long-horizon + 4 oversight + 3 reserve.
+  Bonus prize targets: Fleet AI (Scalable Oversight), Scaler AI Labs (Enterprise Workflows).
 
-author: "Pathikreet"
+author: "Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi"
 entrypoint: "uvicorn app.main:app --host 0.0.0.0 --port 7860"
 base_url: "http://localhost:7860"
 tags:
   - finance
   - enterprise
+  - multi-agent
+  - long-horizon
+  - fleet-ai
+  - oversight
   - reasoning
   - arithmetic
   - policy-compliance
   - multi-step
   - openenv
+  - self-improvement
+  - adaptive-curriculum
+
+# ── AP Clerk Tasks (Themes #2 + #3) ──────────────────────────────────────────
 
 tasks:
+  # Easy
   - id: easy_perfect_match
     name: "Perfect Three-Way Match"
     difficulty: easy
@@ -34,6 +50,7 @@ tasks:
     expected_decision: REJECT
     target_score: 0.99
 
+  # Medium
   - id: medium_quantity_shortfall
     name: "Quantity Shortfall Reconciliation"
     difficulty: medium
@@ -58,17 +75,22 @@ tasks:
     expected_decision: REJECT
     target_score: 0.99
 
+  # Hard
   - id: hard_policy_violation
     name: "Policy Violation — Unauthorized Freight Charge"
     difficulty: hard
     expected_decision: REJECT
     target_score: 0.99
+    multi_step: true
+    max_steps: 3
 
   - id: hard_duplicate_invoice
     name: "Duplicate Invoice Detection"
     difficulty: hard
     expected_decision: REJECT
     target_score: 0.99
+    multi_step: true
+    max_steps: 3
 
   - id: hard_partial_po_match
     name: "Partial PO Coverage"
@@ -82,14 +104,141 @@ tasks:
     expected_decision: REJECT
     target_score: 0.99
 
+  - id: hard_currency_conversion
+    name: "Foreign Currency Invoice Reconciliation"
+    difficulty: hard
+    expected_decision: APPROVE_FULL_or_REJECT
+    target_score: 0.99
+    notes: "Invoice in EUR, PO in USD. Agent must convert using exchange rate in policy."
+
+  - id: hard_manager_preapproval
+    name: "Manager Pre-Approved Freight Override"
+    difficulty: hard
+    expected_decision: ESCALATE_then_APPROVE_FULL
+    target_score: 0.99
+    multi_step: true
+    max_steps: 3
+
+  - id: hard_credit_memo
+    name: "Credit Memo Processing"
+    difficulty: hard
+    expected_decision: APPROVE_PARTIAL_or_REJECT
+    target_score: 0.99
+
+  # Long-Horizon Tasks (Theme #2 — Scale AI bonus)
+  - id: long_invoice_dispute
+    name: "Invoice Dispute Resolution"
+    difficulty: long-horizon
+    expected_decision: REJECT
+    target_score: 0.85
+    multi_step: true
+    max_steps: 12
+    actors: [vendor, manager, compliance]
+    notes: "Multi-step dispute: QUERY_VENDOR reveals vendor error admission. ESCALATE confirms rejection. Actors: VendorActor(fraudulent→honest), ManagerActor."
+
+  - id: long_policy_migration
+    name: "Policy Migration — Mid-Episode Rule Change"
+    difficulty: long-horizon
+    expected_decision: APPROVE_FULL
+    target_score: 0.85
+    multi_step: true
+    max_steps: 10
+    actors: [compliance, manager]
+    notes: "Freight between old cap and new cap. HOLD reveals policy update from ComplianceActor. Apply new policy, approve."
+
+  - id: long_batch_reconciliation
+    name: "Batch Invoice Reconciliation"
+    difficulty: long-horizon
+    expected_decision: APPROVE_FULL
+    target_score: 0.85
+    multi_step: true
+    max_steps: 15
+    notes: "Process invoice independently within a 4-invoice batch context."
+
+  - id: long_manager_chain
+    name: "Manager Unavailable — VP Finance Escalation Chain"
+    difficulty: long-horizon
+    expected_decision: APPROVE_FULL
+    target_score: 0.85
+    multi_step: true
+    max_steps: 14
+    actors: [manager]
+    notes: "First ESCALATE returns OOO message. Second ESCALATE reaches VP Finance who approves."
+
+  - id: long_fraud_investigation
+    name: "Fraud Investigation — Duplicate Payment Attempt"
+    difficulty: long-horizon
+    expected_decision: REJECT
+    target_score: 0.85
+    multi_step: true
+    max_steps: 16
+    actors: [vendor, manager, compliance]
+    notes: "Vendor disputes duplicate; manager audit confirms it. Multi-step investigation chain."
+
+  - id: long_audit_trail
+    name: "SOX Audit Trail — Compliance Documentation"
+    difficulty: long-horizon
+    expected_decision: APPROVE_FULL
+    target_score: 0.85
+    multi_step: true
+    max_steps: 14
+    actors: [compliance]
+    notes: "Standard match but SOX audit requires PO/GRN/amount/policy citation in explanation."
+
+  - id: long_multi_vendor_split
+    name: "Multi-Shipment Split — Partial Delivery Tranche"
+    difficulty: long-horizon
+    expected_decision: APPROVE_PARTIAL
+    target_score: 0.85
+    multi_step: true
+    max_steps: 12
+    actors: [vendor, manager]
+    notes: "PO split across 3 GRNs. Invoice covers first tranche only."
+
+  # Oversight Tasks (Theme #1 Fleet AI — via /oversight/* endpoints)
+  - id: oversight_fraud_detection
+    name: "Oversight: Fraud Detection"
+    difficulty: oversight
+    agent: oversight
+    endpoint: /oversight/reset
+    target_score: 0.80
+    notes: "5 episodes (1 fraudulent). Identify and flag with specific signal."
+
+  - id: oversight_pattern_recognition
+    name: "Oversight: Pattern Recognition"
+    difficulty: oversight
+    agent: oversight
+    endpoint: /oversight/reset
+    target_score: 0.80
+    notes: "5 episodes (2-3 with same violation pattern). Flag all matching pattern."
+
+  - id: oversight_false_positive_trap
+    name: "Oversight: False Positive Trap"
+    difficulty: oversight
+    agent: oversight
+    endpoint: /oversight/reset
+    target_score: 0.80
+    notes: "All clean episodes — agent must CLEAR without over-flagging."
+
+  - id: oversight_explanation_quality
+    name: "Oversight: Explanation Quality"
+    difficulty: oversight
+    agent: oversight
+    endpoint: /oversight/reset
+    target_score: 0.80
+    notes: "Explanation must cite specific numeric signals and fraud keywords."
+
+# ── Action Spaces ─────────────────────────────────────────────────────────────
+
 action_space:
   type: APAction
   fields:
     decision:
       type: enum
-      values: [APPROVE_FULL, APPROVE_PARTIAL, REJECT, QUERY_VENDOR, ESCALATE, HOLD]
+      values: [APPROVE_FULL, APPROVE_PARTIAL, REJECT, QUERY_VENDOR, ESCALATE, HOLD, HYPOTHETICAL]
       terminal: [APPROVE_FULL, APPROVE_PARTIAL, REJECT]
       intermediate: [QUERY_VENDOR, ESCALATE, HOLD]
+      training_only: [HYPOTHETICAL]
     approved_amount: { type: float, range: [0.0, inf] }
     reason_code:
       type: enum
@@ -98,6 +247,16 @@ action_space:
                VENDOR_MISMATCH, TAX_DISCREPANCY,
                PENDING_CLARIFICATION, MANAGER_REVIEW]
     explanation: { type: string, min_length: 10, max_length: 600 }
+
+oversight_action_space:
+  type: OversightAction
+  fields:
+    episode_id:  string
+    verdict:     { type: enum, values: [CLEAR, FLAG_FOR_REVIEW, ESCALATE_TO_AUDIT] }
+    signal:      { type: string, min_length: 10, max_length: 200 }
+    confidence:  { type: float, range: [0.0, 1.0] }
+
+# ── Observation Spaces ────────────────────────────────────────────────────────
 
 observation_space:
   type: APObservation
@@ -115,19 +274,90 @@ observation_space:
     freight_cap:      float
     price_tolerance:  float
     action_history:   List[dict]
-    context_notes:    List[string]
+    context_notes:    List[string]     # revealed by intermediate actions
+
+oversight_observation_space:
+  type: OversightObservation
+  fields:
+    session_id:            string
+    episode_summaries:     List[EpisodeSummary]
+    known_fraud_patterns:  List[string]
+    audit_budget:          int
+    step_count:            int
+    max_steps:             int
+    action_history:        List[dict]
+
+# ── Reward Configuration ──────────────────────────────────────────────────────
 
 reward_range: [0.01, 0.99]
+reward_range_note: "Open interval — scores strictly (0.01, 0.99), never exactly 0 or 1."
 reward_type: APReward
 reward_partial_credit: true
+
+oversight_reward_range: [0.01, 0.99]
+oversight_reward_components:
+  correct_flag:       0.70
+  explanation_quality: 0.20
+  false_positive:     -0.25
+  correct_clear:      0.01
+
+# ── Environment Configuration ─────────────────────────────────────────────────
+
 episode_termination: terminal_action_or_max_steps
 multi_step_support: true
+multi_step_context_routing: true
+max_steps_range: [1, 16]
 randomised: true
 seed_support: true
+randomization_scope:
+  - policy_thresholds
+  - distractor_documents
+  - item_selection
+  - exchange_rates
+  - actor_personas
+  - fraud_injection_position
+
+multi_agent: true
+agents:
+  - id: ap-clerk
+    description: "Accounts Payable clerk making invoice decisions"
+    endpoints: [/reset, /step, /state]
+  - id: oversight
+    description: "Fleet AI oversight agent monitoring clerk decisions"
+    endpoints: [/oversight/reset, /oversight/step, /oversight/state]
+
+actors:
+  - id: vendor
+    class: VendorActor
+    personas: [honest, fraudulent, confused]
+    triggered_by: QUERY_VENDOR
+  - id: manager
+    class: ManagerActor
+    attributes: [budget_authority, risk_appetite, pre_approved]
+    triggered_by: ESCALATE
+  - id: compliance
+    class: ComplianceActor
+    frameworks: [SOX, GDPR, INTERNAL_POLICY]
+    triggered_by: HOLD
+
+adaptive_curriculum: true
+curriculum_endpoint: "POST /curriculum/next_task"
+difficulty_ladder: [easy, medium, hard, long-horizon, oversight]
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 endpoints:
-  reset:  "POST /reset"
-  step:   "POST /step"
-  state:  "GET  /state"
-  tasks:  "GET  /tasks"
-  health: "GET  /health"
+  # AP Clerk
+  reset:           "POST /reset"
+  step:            "POST /step"
+  state:           "GET  /state"
+  # Oversight Agent
+  oversight_reset: "POST /oversight/reset"
+  oversight_step:  "POST /oversight/step"
+  oversight_state: "GET  /oversight/state"
+  # Curriculum
+  curriculum:      "POST /curriculum/next_task"
+  # Meta
+  tasks:           "GET  /tasks"
+  health:          "GET  /health"
+  stats:           "GET  /stats"

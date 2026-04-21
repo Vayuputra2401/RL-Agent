@@ -1,12 +1,16 @@
 """
-Inference Script — AP Clerk Environment
-========================================
+Inference Script — AP Commander (Multi-Agent Enterprise Financial Environment)
+==============================================================================
 MANDATORY environment variables:
   API_BASE_URL   The OpenAI-compatible API base URL.
                  e.g. https://router.huggingface.co/v1
   MODEL_NAME     The model identifier.
                  e.g. Qwen/Qwen2.5-72B-Instruct
   HF_TOKEN       Your Hugging Face token (used as the API key).
+
+Optional:
+  RUN_OVERSIGHT=1   Also run oversight agent tasks
+  TASK_FILTER=easy  Only run tasks matching this difficulty prefix
 
 Usage:
   export API_BASE_URL="https://router.huggingface.co/v1"
@@ -30,9 +34,11 @@ from openai import OpenAI
 from app import APClerkEnvironment, APAction, DecisionType, ReasonCode
 from app.tasks import TASKS
 
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME:   str = os.getenv("MODEL_NAME",   "Qwen/Qwen2.5-72B-Instruct")
-API_KEY:      str = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
+API_BASE_URL:   str  = os.getenv("API_BASE_URL",  "https://router.huggingface.co/v1")
+MODEL_NAME:     str  = os.getenv("MODEL_NAME",    "Qwen/Qwen2.5-72B-Instruct")
+API_KEY:        str  = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
+RUN_OVERSIGHT:  bool = os.getenv("RUN_OVERSIGHT", "0") == "1"
+TASK_FILTER:    str  = os.getenv("TASK_FILTER", "")  # e.g. "easy" or "long"
 
 if not API_KEY:
     print("ERROR: required environment variable 'HF_TOKEN' is not set.", file=sys.stderr)
@@ -54,47 +60,91 @@ SYSTEM_PROMPT = textwrap.dedent("""
     {
       "decision":        "APPROVE_FULL" | "APPROVE_PARTIAL" | "REJECT" |
                          "ESCALATE" | "QUERY_VENDOR" | "HOLD",
-      "approved_amount": <float — dollar amount to pay, 0.0 if REJECT/ESCALATE/QUERY_VENDOR/HOLD>,
+      "approved_amount": <float — dollar amount to pay; 0.0 if REJECT/ESCALATE/QUERY_VENDOR/HOLD;
+                          use the NEGATIVE credit amount for credit memo approvals>,
       "reason_code":     "MATCH_CONFIRMED" | "QUANTITY_MISMATCH" | "PRICE_DISCREPANCY" |
                          "POLICY_VIOLATION" | "NO_PO_FOUND" | "DUPLICATE_INVOICE" |
                          "VENDOR_MISMATCH" | "TAX_DISCREPANCY" |
                          "PENDING_CLARIFICATION" | "MANAGER_REVIEW",
-      "explanation":     "<10–500 char plain-English justification>"
+      "explanation":     "<10–500 char justification — MUST cite specific dollar values or percentages>"
     }
 
-    Decision rules:
-    - APPROVE_FULL: Invoice, PO and GRN all match; pay the full invoice total.
-    - APPROVE_PARTIAL: Partial match (quantity shortfall or partial PO coverage);
-      pay only for what was received and authorised.
-    - REJECT: Policy violation, no PO, vendor name mismatch, tax discrepancy,
-      duplicate invoice, or unresolvable discrepancy; do not pay.
-    - ESCALATE: Use when freight exceeds policy cap or there is a complex policy question
-      requiring Finance Manager sign-off before you can decide. Use MANAGER_REVIEW reason code.
-      The environment will reveal the Finance Manager's response in the next step.
-    - QUERY_VENDOR: Use when the invoice appears to be a duplicate and you want vendor
-      confirmation before rejecting. Use PENDING_CLARIFICATION reason code.
-      The environment will reveal the vendor's response in the next step.
+    REASON CODE MAPPING (use exactly the matching code for your decision):
+      APPROVE_FULL    → MATCH_CONFIRMED
+      APPROVE_PARTIAL → QUANTITY_MISMATCH  (or MATCH_CONFIRMED for credit memos / partial PO)
+      REJECT          → NO_PO_FOUND | PRICE_DISCREPANCY | POLICY_VIOLATION | DUPLICATE_INVOICE
+                        | VENDOR_MISMATCH | TAX_DISCREPANCY
+      QUERY_VENDOR    → PENDING_CLARIFICATION
+      ESCALATE        → MANAGER_REVIEW
+      HOLD            → PENDING_CLARIFICATION
 
-    Multi-step guidance:
-    - If max_steps > 1 AND the task involves a freight policy violation, use ESCALATE first.
-    - If max_steps > 1 AND the task involves a possible duplicate invoice, use QUERY_VENDOR first.
-    - After receiving context_notes from the intermediate step, make your final terminal decision.
-    - Single-step tasks (max_steps = 1): go straight to APPROVE_FULL / APPROVE_PARTIAL / REJECT.
+    MULTI-STEP TRIGGERS (only when max_steps > 1):
+      USE ESCALATE when:
+        (1) freight_charge > freight_cap stated in COMPANY POLICY, AND max_steps > 1
+        (2) policy text mentions "manager approval required" or "freight override"
+        (3) long-horizon tasks: manager is out-of-office (context note says so) → ESCALATE again for VP Finance
+        After ESCALATE: read context_notes carefully — if manager pre-approved, APPROVE_FULL.
+        If NOT pre-approved, REJECT with POLICY_VIOLATION.
+      USE QUERY_VENDOR when:
+        (1) invoice_id already appears in PAID INVOICE LEDGER, AND max_steps > 1
+        (2) price discrepancy exists in dispute tasks (long_invoice_dispute)
+        After QUERY_VENDOR: read context_notes — vendor confirming duplicate → REJECT with DUPLICATE_INVOICE.
+      USE HOLD when:
+        (1) compliance review required (context mentions SOX/GDPR/compliance flag)
+        After HOLD: read context_notes for compliance verdict then decide.
+      Single-step tasks (max_steps = 1): go directly to APPROVE_FULL / APPROVE_PARTIAL / REJECT.
 
-    Mandatory checks before deciding:
-    1. Is there a valid OPEN Purchase Order matching the invoice PO reference?
-    2. Does the PO vendor name EXACTLY match the invoice vendor name?
-    3. Do invoice unit prices match agreed PO prices within the stated policy tolerance?
-    4. Do GRN quantities (sum ALL GRNs for this PO) confirm receipt of invoiced goods?
-    5. Is this invoice ID already in the paid ledger? (duplicate check)
-    6. Does the invoice include any charges not in the PO (freight above cap, tax, fees)?
-    7. Are ALL invoice line items covered by the PO?
+    LONG-HORIZON TASK TIPS (max_steps 10-16):
+      - long_invoice_dispute: QUERY_VENDOR first, then ESCALATE, then REJECT
+      - long_policy_migration: HOLD to get compliance update, then re-read new policy, APPROVE_FULL
+      - long_manager_chain: ESCALATE (manager OOO) → ESCALATE again (VP Finance) → APPROVE_FULL
+      - long_fraud_investigation: QUERY_VENDOR (vendor denies) → ESCALATE (manager confirms duplicate) → REJECT
+      - long_audit_trail: HOLD for SOX review → APPROVE_FULL with PO/GRN/amount citations
+      - long_batch_reconciliation: treat as standard match in batch context
+      - long_multi_vendor_split: approve invoice amount (first tranche only)
 
-    Policy thresholds (freight cap, price tolerance) VARY per episode.
-    Always read the COMPANY POLICY section carefully for the exact values.
+    DECISION RULES:
+    - APPROVE_FULL: Invoice, PO (OPEN) and GRN all match exactly. Pay full invoice total.
+    - APPROVE_PARTIAL: Quantity shortfall, partial PO coverage, or credit memo with valid PO.
+      Pay only for what was received and authorised. For credit memos, approved_amount is NEGATIVE.
+    - REJECT: Policy violation, no valid OPEN PO, vendor name mismatch, tax not in PO,
+      duplicate invoice, price deviation over threshold, or no PO for credit memo.
+    - ESCALATE/QUERY_VENDOR: Intermediate steps that reveal context (see triggers above).
 
-    Ignore CLOSED purchase orders — they are historical records and do not authorise payment.
-    Ignore GRNs whose PO reference does not match the invoice's PO reference.
+    MANDATORY CHECKS before deciding:
+    1. OPEN PO? — Find a matching OPEN PO by po_number. Ignore ALL CLOSED POs.
+    2. Vendor name? — Invoice vendor must EXACTLY match PO vendor name. Any difference → REJECT.
+    3. Price check? — Compute deviation = |invoice_price - po_price| / po_price.
+       If deviation > price_tolerance (in COMPANY POLICY) → REJECT with PRICE_DISCREPANCY.
+    4. Quantity? — Sum received_quantity across ALL GRNs whose po_number matches the OPEN PO.
+       Pay only for received quantity × agreed PO price.
+    5. Duplicate? — Is invoice_id in PAID INVOICE LEDGER? If yes → QUERY_VENDOR (if multi-step) or REJECT.
+    6. Extra charges? — Freight above cap → check policy for override. Tax not in PO → REJECT.
+    7. Line items? — Each invoice line must be covered by the PO. Uncovered items → APPROVE_PARTIAL.
+    8. Currency? — If invoice currency ≠ USD, convert using the exchange rate in COMPANY POLICY.
+       approved_amount must be in USD.
+
+    EXPLANATION QUALITY: Always cite specific numbers. Good examples:
+      "Invoice price $520 vs PO price $500 — 4% deviation exceeds 2% threshold. REJECT."
+      "Freight $85 exceeds cap of $50. Escalating to Finance Manager for pre-approval check."
+      "GRN confirms 80 of 100 ordered units. Approving $40,000 (80 × $500) per Policy Rule 3."
+
+    EXAMPLES:
+    Example 1 — Perfect match:
+    Invoice $1,500, PO authorizes $1,500, GRN confirms all 10 units. Freight $20 under $50 cap.
+    → {"decision":"APPROVE_FULL","approved_amount":1500.00,"reason_code":"MATCH_CONFIRMED",
+       "explanation":"Invoice $1,500 matches PO-2024-001 ($1,500) and GRN confirms all 10 units received. Freight $20 within $50 cap."}
+
+    Example 2 — Duplicate invoice (multi-step):
+    Invoice INV-2024-5432 is in the PAID INVOICE LEDGER. max_steps = 3.
+    → {"decision":"QUERY_VENDOR","approved_amount":0.0,"reason_code":"PENDING_CLARIFICATION",
+       "explanation":"INV-2024-5432 already appears in the paid ledger. Querying vendor to confirm before final rejection."}
+    (After vendor confirms duplicate:)
+    → {"decision":"REJECT","approved_amount":0.0,"reason_code":"DUPLICATE_INVOICE",
+       "explanation":"Vendor confirmed INV-2024-5432 was paid in a prior cycle. Rejecting duplicate per Policy Rule 6."}
+
+    Policy thresholds (freight cap, price tolerance, FX rate) VARY per episode.
+    Always read COMPANY POLICY carefully for exact values.
 """).strip()
 
 
@@ -190,17 +240,25 @@ def build_user_prompt(obs) -> str:
 
 
 def call_llm(user_prompt: str) -> str:
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        max_tokens=MAX_TOKENS,
-        temperature=TEMPERATURE,
-        timeout=60,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": user_prompt},
-        ],
-    )
-    return response.choices[0].message.content or ""
+    for attempt in range(2):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                timeout=60,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_prompt},
+                ],
+            )
+            return response.choices[0].message.content or ""
+        except Exception as exc:
+            if attempt == 0:
+                print(f"  [WARN] LLM call failed ({exc}), retrying in 3s…", flush=True)
+                time.sleep(3)
+            else:
+                raise
 
 
 def parse_action(raw: str) -> Optional[APAction]:
@@ -281,14 +339,26 @@ def run_task(task_id: str, seed: int = None) -> dict:
 
 def main():
     print("=" * 65)
-    print("  AP Clerk Environment — Baseline Inference")
+    print("  AP Commander — Multi-Agent Enterprise Environment")
     print(f"  Model    : {MODEL_NAME}")
     print(f"  API Base : {API_BASE_URL}")
     print("=" * 65)
 
     results     = []
     total_score = 0.0
-    task_ids    = list(TASKS.keys())
+    # Exclude oversight stub tasks (they use the dedicated /oversight/* endpoints)
+    all_task_ids = [
+        tid for tid, spec in TASKS.items()
+        if spec.difficulty != "oversight"
+    ]
+    # Apply optional filter
+    if TASK_FILTER:
+        task_ids = [tid for tid in all_task_ids if TASK_FILTER in tid]
+        print(f"  Filter   : '{TASK_FILTER}' → {len(task_ids)} tasks")
+    else:
+        task_ids = all_task_ids
+    print(f"  Tasks    : {len(task_ids)}")
+    print("=" * 65)
 
     for task_id in task_ids:
         print(f"\n[{task_id}]")
@@ -308,16 +378,31 @@ def main():
             print(f"  ERROR: {exc}")
             results.append({"task_id": task_id, "score": 0.01, "error": str(exc)})
 
-    mean_score = total_score / len(task_ids)
+    mean_score = total_score / len(task_ids) if task_ids else 0.0
+
+    # Score breakdown by difficulty
+    by_diff: dict = {}
+    for r in results:
+        spec = TASKS.get(r.get("task_id", ""))
+        if spec:
+            d = spec.difficulty
+            by_diff.setdefault(d, []).append(r.get("score", 0.01))
+    diff_means = {d: round(sum(s)/len(s), 3) for d, s in by_diff.items()}
+
     print("\n" + "=" * 65)
     print(f"  MEAN SCORE: {mean_score:.3f}  ({total_score:.3f} / {len(task_ids)})")
+    for d, m in sorted(diff_means.items()):
+        print(f"    {d:<16}: {m:.3f}")
     print("=" * 65)
 
     output = {
-        "model":      MODEL_NAME,
-        "api_base":   API_BASE_URL,
-        "tasks":      results,
-        "mean_score": round(mean_score, 4),
+        "model":           MODEL_NAME,
+        "api_base":        API_BASE_URL,
+        "tasks":           results,
+        "mean_score":      round(mean_score, 4),
+        "by_difficulty":   diff_means,
+        "environment":     "ap-commander",
+        "version":         "4.0.0",
     }
     with open("results.json", "w") as f:
         json.dump(output, f, indent=2)

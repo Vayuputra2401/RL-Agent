@@ -1,11 +1,11 @@
 """
-AP Clerk Environment — Typed Models
-All OpenEnv-required models: Observation, Action, Reward.
+AP Commander — Typed Models
+OpenEnv-required models: Observation, Action, Reward for AP Clerk and Oversight agents.
 """
 
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 
 
@@ -63,6 +63,7 @@ class DecisionType(str, Enum):
     QUERY_VENDOR    = "QUERY_VENDOR"
     ESCALATE        = "ESCALATE"
     HOLD            = "HOLD"
+    HYPOTHETICAL    = "HYPOTHETICAL"   # Training-only: explore counterfactual path
 
 
 class ReasonCode(str, Enum):
@@ -158,3 +159,113 @@ class TaskInfo(BaseModel):
     name: str
     difficulty: str
     description: str
+
+
+# ── Actor models (multi-agent, Theme #1) ─────────────────────────────────────
+
+class ActorPersona(str, Enum):
+    honest      = "honest"
+    fraudulent  = "fraudulent"
+    confused    = "confused"
+
+
+class ActorType(str, Enum):
+    vendor     = "vendor"
+    manager    = "manager"
+    compliance = "compliance"
+
+
+class ActorResponse(BaseModel):
+    actor_type:  ActorType
+    persona:     ActorPersona
+    message:     str
+    verdict:     str                 # e.g. "confirmed", "denied", "approved", "flagged"
+    context_tag: str                 # prefix like "[VENDOR]", "[MANAGER]", "[COMPLIANCE]"
+
+
+# ── Oversight models (Fleet AI, Theme #1 bonus) ───────────────────────────────
+
+class EpisodeSummary(BaseModel):
+    episode_id:        str
+    task_id:           str
+    invoice_id:        str
+    vendor_name:       str
+    invoice_total:     float
+    currency:          str
+    final_decision:    str
+    approved_amount:   float
+    reason_code:       str
+    explanation:       str
+    action_history:    List[Dict[str, Any]] = []
+    is_fraudulent:     bool = False     # ground truth, hidden from agent in prompt
+    fraud_type:        Optional[str] = None   # "duplicate", "price_inflation", "fake_vendor"
+
+
+class OversightObservation(BaseModel):
+    session_id:         str
+    episode_summaries:  List[EpisodeSummary]
+    known_fraud_patterns: List[str] = []    # hints from training corpus
+    audit_budget:       int = 2             # max flags allowed this round
+    step_count:         int = 0
+    max_steps:          int = 5            # one verdict per episode
+    action_history:     List[Dict[str, Any]] = []
+
+
+class OversightAction(BaseModel):
+    episode_id: str
+    verdict:    Literal["CLEAR", "FLAG_FOR_REVIEW", "ESCALATE_TO_AUDIT"]
+    signal:     str = Field(min_length=10, max_length=200)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class OversightReward(BaseModel):
+    score:     float = Field(ge=0.01, le=0.99)
+    breakdown: Dict[str, Any]
+    feedback:  str
+    done:      bool = False
+
+    @field_validator("score", mode="before")
+    @classmethod
+    def clamp_score(cls, v: float) -> float:
+        return max(0.01, min(0.99, float(v)))
+
+
+class OversightResetRequest(BaseModel):
+    seed: Optional[int] = None
+    num_episodes: int = Field(default=5, ge=3, le=8)
+
+
+class OversightResetResponse(BaseModel):
+    observation: OversightObservation
+    session_id:  str
+    info:        Dict[str, Any]
+
+
+class OversightStepRequest(BaseModel):
+    action:     OversightAction
+    session_id: str
+
+
+class OversightStepResponse(BaseModel):
+    observation: OversightObservation
+    reward:      OversightReward
+    done:        bool
+    info:        Dict[str, Any]
+
+
+# ── Curriculum models (Theme #4) ──────────────────────────────────────────────
+
+class CurriculumEntry(BaseModel):
+    task_id: str
+    score:   float
+
+
+class CurriculumRequest(BaseModel):
+    session_history: List[CurriculumEntry] = []
+
+
+class CurriculumResponse(BaseModel):
+    recommended_task_id: str
+    difficulty:          str
+    reason:              str
+    unlocked_tasks:      List[str] = []

@@ -1,199 +1,249 @@
 ---
-title: AP Clerk Environment
-emoji: 🧾
+title: AP Commander
+emoji: 🏛️
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
 pinned: true
 license: mit
 tags:
   - openenv
   - reinforcement-learning
+  - multi-agent
+  - fleet-ai
+  - long-horizon
   - finance
   - enterprise
+  - oversight
 ---
 
-# AP Clerk Environment
+# AP Commander — Multi-Agent Enterprise Financial Operations Environment
 
-A reinforcement learning environment that simulates an Accounts Payable clerk performing three-way invoice matching. Given a vendor invoice, a set of Purchase Orders, and warehouse Goods Receipt Notes, an agent must cross-reference the documents, read the company policy, and decide whether to approve, partially approve, or reject the invoice for payment.
+A multi-agent reinforcement learning environment for enterprise Accounts Payable workflows. Covers all four hackathon themes: Multi-Agent Interactions, Long-Horizon Planning, Professional World Modeling, and Self-Improvement.
 
-Three-way invoice matching is a standard financial control used by companies to prevent overpayments, duplicate payments, and policy violations before money leaves the organisation.
-
----
-
-## Goal
-
-The agent receives a set of documents and must produce a payment decision:
-
-- **APPROVE_FULL** — all documents agree, pay the full invoice amount
-- **APPROVE_PARTIAL** — partial match, pay only for what was received
-- **REJECT** — mismatch, policy violation, or unresolvable discrepancy
-
-For complex cases, the agent can take an intermediate step first (ESCALATE, QUERY_VENDOR, HOLD) to reveal additional context before making the final call.
+**Hackathon:** Meta PyTorch OpenEnv × Scaler School of Technology Grand Finale  
+**Team:** Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi
 
 ---
 
-## How an Episode Works
+## What This Environment Trains
 
-### Single-step tasks
+AP Commander trains two cooperative agents in an enterprise financial setting:
 
+**AP Clerk Agent** — Reviews vendor invoices, cross-references Purchase Orders and Goods Receipts, applies company policy, and decides whether to approve, partially approve, or reject payment. Must interact with simulated workplace actors (vendor, manager, compliance officer) across multi-step episodes up to 16 steps long.
+
+**Oversight Agent (Fleet AI)** — Monitors batches of completed AP Clerk decisions. Identifies fraudulent approvals, policy violations, and suspicious patterns. Must flag issues with specific numeric evidence and avoid false positives.
+
+---
+
+## Themes Covered
+
+| Theme | Implementation | Bonus Prize Target |
+|---|---|---|
+| **#1 Multi-Agent** | AP Clerk + Oversight Agent + 3 actor-agents (VendorActor, ManagerActor, ComplianceActor) | Fleet AI + Halluminate |
+| **#2 Long-Horizon** | 7 tasks with 10–16 step episodes (invoice dispute, fraud investigation, escalation chains) | Scale AI |
+| **#3 Professional** | Dynamic enterprise world: policy changes mid-episode, SOX audit trails, VP escalation chains | Scaler AI Labs |
+| **#4 Self-Improvement** | Adaptive curriculum endpoint + `HYPOTHETICAL` counterfactual action | — |
+
+---
+
+## Agents and Actors
+
+### AP Clerk Agent
+Makes invoice payment decisions using a 4-field action:
+
+```json
+{
+  "decision": "APPROVE_FULL | APPROVE_PARTIAL | REJECT | ESCALATE | QUERY_VENDOR | HOLD | HYPOTHETICAL",
+  "approved_amount": 1234.56,
+  "reason_code": "MATCH_CONFIRMED | PRICE_DISCREPANCY | DUPLICATE_INVOICE | ...",
+  "explanation": "Invoice $1,234.56 matches PO-2024-001. GRN confirms all 10 units. Approving."
+}
+```
+
+### Oversight Agent
+Reviews batches of completed AP Clerk episodes:
+
+```json
+{
+  "episode_id": "EP-003-716",
+  "verdict": "FLAG_FOR_REVIEW | ESCALATE_TO_AUDIT | CLEAR",
+  "signal": "Approved $8,900 without checking paid ledger — DUPLICATE_INVOICE reason code absent",
+  "confidence": 0.92
+}
+```
+
+### Simulated Actors
+| Actor | Triggered by | Behavior |
+|---|---|---|
+| `VendorActor` | `QUERY_VENDOR` | Responds based on persona: honest (admits errors), fraudulent (justifies inflation), confused (ambiguous) |
+| `ManagerActor` | `ESCALATE` | Approves/denies based on budget authority and risk appetite; can be out-of-office (triggers VP chain) |
+| `ComplianceActor` | `HOLD` | Reviews under SOX / GDPR / Internal Policy and returns a compliance verdict |
+
+---
+
+## Episode Flows
+
+### Single-step task (easy/medium)
 ```
 POST /reset  { "task_id": "easy_perfect_match", "seed": 42 }
-→ observation: invoice, purchase_orders, goods_receipts, company_policy
+→ observation
 
-POST /step   { "session_id": "...", "action": { decision, approved_amount, reason_code, explanation } }
-→ reward: { score, breakdown, feedback }, done: true
+POST /step   { "session_id": "...", "action": { "decision": "APPROVE_FULL", ... } }
+→ reward { score: 0.87, breakdown: {...}, feedback: "..." }, done: true
 ```
 
-### Multi-step tasks
-
+### Multi-step task (hard, max_steps=3)
 ```
 POST /reset  → observation (max_steps: 3)
-POST /step   { action: { decision: "ESCALATE", ... } }   → done: false, context_notes revealed
-POST /step   { action: { decision: "REJECT", ... } }     → done: true, score awarded
+POST /step   { action: { decision: "ESCALATE", ... } }    → done: false, [MANAGER] context revealed
+POST /step   { action: { decision: "APPROVE_FULL", ... } } → done: true, score with process bonus
 ```
 
-The agent can skip the intermediate step and go straight to a terminal decision — it just misses the small process bonus for following proper verification procedure.
+### Long-horizon task (max_steps 10–16)
+```
+POST /reset  { "task_id": "long_fraud_investigation" }
+POST /step   QUERY_VENDOR  → vendor disputes duplicate (fraudulent response)
+POST /step   ESCALATE      → manager confirms from ledger: it IS a duplicate
+POST /step   REJECT        → scored with investigation process bonus
+```
+
+### Oversight session
+```
+POST /oversight/reset  { "num_episodes": 5 }
+→ 5 completed AP Clerk episode summaries (1–2 contain fraud, labels hidden)
+
+POST /oversight/step  { "episode_id": "EP-001-...", "verdict": "FLAG_FOR_REVIEW", "signal": "..." }
+→ reward { score: 0.90 }   (if correct flag with numeric signal)
+... repeat for each episode
+```
+
+### Adaptive curriculum
+```
+POST /curriculum/next_task  { "session_history": [{ "task_id": "easy_perfect_match", "score": 0.82 }] }
+→ { "recommended_task_id": "medium_quantity_shortfall", "difficulty": "medium", "reason": "..." }
+```
 
 ---
 
-## What the Agent Sees (Observation)
+## Task Library (24 tasks)
 
-| Field | Description |
-|---|---|
-| `invoice` | Vendor bill: line items, quantities, unit prices, freight charge, tax amount, total |
-| `purchase_orders` | All POs in the system — includes CLOSED historical ones; only OPEN POs authorise payment |
-| `goods_receipts` | Warehouse receipts — may include GRNs for other POs; match by `po_number` |
-| `paid_invoice_ids` | Invoice IDs already settled — used in duplicate-detection tasks |
-| `company_policy` | Plain-text policy document with episode-specific thresholds (freight cap, price tolerance) |
-| `step_count` / `max_steps` | Episode progress |
-| `action_history` | Prior actions taken this episode |
-| `context_notes` | Responses revealed by intermediate actions |
+### Original 13 tasks (easy / medium / hard)
 
-Every episode is randomised from a seed. Freight caps ($30–$100) and price tolerances (0.5%–3%) vary per episode, so the agent must read the policy each time.
+| Task ID | Difficulty | max_steps | Correct Decision |
+|---|---|---|---|
+| `easy_perfect_match` | easy | 1 | APPROVE_FULL |
+| `easy_no_po_found` | easy | 1 | REJECT |
+| `medium_quantity_shortfall` | medium | 1 | APPROVE_PARTIAL |
+| `medium_price_discrepancy` | medium | 1 | REJECT |
+| `medium_split_delivery` | medium | 1 | APPROVE_FULL |
+| `medium_vendor_mismatch` | medium | 1 | REJECT |
+| `hard_policy_violation` | hard | 3 | ESCALATE → REJECT |
+| `hard_duplicate_invoice` | hard | 3 | QUERY_VENDOR → REJECT |
+| `hard_partial_po_match` | hard | 1 | APPROVE_PARTIAL |
+| `hard_tax_discrepancy` | hard | 1 | REJECT |
+| `hard_currency_conversion` | hard | 1 | APPROVE_FULL or REJECT |
+| `hard_manager_preapproval` | hard | 3 | ESCALATE → APPROVE_FULL |
+| `hard_credit_memo` | hard | 1 | APPROVE_PARTIAL or REJECT |
 
----
+### New 7 long-horizon tasks (10–16 steps)
 
-## What the Agent Does (Action)
-
-| Field | Type | Description |
+| Task ID | max_steps | Optimal Workflow |
 |---|---|---|
-| `decision` | enum | Payment verdict (see below) |
-| `approved_amount` | float | Dollar amount to pay. Must be 0.0 if REJECT. |
-| `reason_code` | enum | Classification of the decision (see below) |
-| `explanation` | string | Plain-English justification (10–600 chars) |
+| `long_invoice_dispute` | 12 | QUERY_VENDOR → ESCALATE → REJECT (price error) |
+| `long_policy_migration` | 10 | HOLD → compliance reveals new cap → APPROVE_FULL |
+| `long_batch_reconciliation` | 15 | Standard 3-way match in batch context → APPROVE_FULL |
+| `long_manager_chain` | 14 | ESCALATE (OOO) → ESCALATE again (VP Finance) → APPROVE_FULL |
+| `long_fraud_investigation` | 16 | QUERY_VENDOR (vendor denies) → ESCALATE (manager confirms) → REJECT |
+| `long_audit_trail` | 14 | HOLD → SOX review → APPROVE_FULL with PO/GRN/amount citations |
+| `long_multi_vendor_split` | 12 | 3 GRNs, first tranche only → APPROVE_PARTIAL |
 
-**Terminal decisions:**
+### 4 oversight tasks (via `/oversight/*` endpoints)
 
-| Decision | When |
+| Task ID | Description |
 |---|---|
-| `APPROVE_FULL` | Invoice, PO, and GRN all match |
-| `APPROVE_PARTIAL` | Partial match — pay only for what was received or authorised |
-| `REJECT` | Policy violation, mismatch, no PO, duplicate |
-
-**Intermediate decisions** (multi-step tasks, episode continues):
-
-| Decision | When |
-|---|---|
-| `ESCALATE` | Escalate to Finance Manager |
-| `QUERY_VENDOR` | Request vendor clarification |
-| `HOLD` | Place invoice on hold |
-
-**Reason codes:**
-
-`MATCH_CONFIRMED` / `QUANTITY_MISMATCH` / `PRICE_DISCREPANCY` / `POLICY_VIOLATION` / `NO_PO_FOUND` / `DUPLICATE_INVOICE` / `VENDOR_MISMATCH` / `TAX_DISCREPANCY` / `PENDING_CLARIFICATION` / `MANAGER_REVIEW`
+| `oversight_fraud_detection` | 5 episodes, 1 fraudulent — identify and flag with evidence |
+| `oversight_pattern_recognition` | 5 episodes, 2–3 with same violation — flag the pattern |
+| `oversight_false_positive_trap` | All clean — agent must CLEAR without over-flagging |
+| `oversight_explanation_quality` | Must cite specific $ amounts and fraud keywords |
 
 ---
 
-## Tasks
+## Reward Structure
 
-Ten tasks across three difficulty levels. Each call to `/reset` with a different `seed` produces a different invoice, vendor, product, quantities, prices, and policy thresholds.
+### AP Clerk rewards
+Scores are partial-credit, broken down by component. All scores in open interval (0.01, 0.99).
 
-### Easy
-
-| Task ID | What the agent must do |
-|---|---|
-| `easy_perfect_match` | Verify invoice, PO, and GRN all agree, then approve full amount |
-| `easy_no_po_found` | Recognise there is no OPEN PO for this invoice and reject |
-
-### Medium
-
-| Task ID | What the agent must do |
-|---|---|
-| `medium_quantity_shortfall` | Calculate payable amount from GRN-confirmed quantities only and partial-approve |
-| `medium_price_discrepancy` | Detect invoice unit price exceeds agreed PO price beyond tolerance and reject |
-| `medium_split_delivery` | Sum quantities across two GRNs for the same PO and approve full amount |
-| `medium_vendor_mismatch` | Identify subtle vendor name mismatch between invoice and PO and reject |
-
-### Hard
-
-| Task ID | What the agent must do | max_steps |
+| Component | Weight | Scoring |
 |---|---|---|
-| `hard_policy_violation` | Freight charge exceeds episode-specific cap; optionally escalate before rejecting | 3 |
-| `hard_duplicate_invoice` | Invoice ID is already in the paid ledger; optionally query vendor before rejecting | 3 |
-| `hard_partial_po_match` | Only one of two invoice line items is covered by the PO; partial-approve for covered lines only | 1 |
-| `hard_tax_discrepancy` | Invoice includes a tax charge not in the PO; reject | 1 |
+| Decision accuracy | 38–55% | 1.0 correct, 0.0–0.4 wrong |
+| Amount accuracy | 20–45% | 1.0 within 1%, 0.6 within 3%, 0.3 within 8% |
+| Reason code | 10–30% | 1.0 correct, 0.05–0.40 partial |
+| Explanation quality | 10–20% | Requires specific $ or % citations + keywords |
+| Process bonus | 0–15% | Correct intermediate step before terminal decision |
 
----
-
-## Grading
-
-Scores are partial and broken down across components so near-correct decisions still produce a useful learning signal.
-
-| Task | Score formula |
+### Oversight Agent rewards
+| Condition | Score Component |
 |---|---|
-| `easy_perfect_match` | 50% decision + 35% amount accuracy + 15% reason code |
-| `easy_no_po_found` | 60% decision + 30% reason code + 10% amount is zero |
-| `medium_quantity_shortfall` | 45% decision + 40% amount accuracy + 15% reason code |
-| `medium_price_discrepancy` | 55% decision + 30% reason code + 15% explanation quality |
-| `medium_split_delivery` | 50% decision + 35% amount (sum of both GRNs) + 15% reason code |
-| `medium_vendor_mismatch` | 50% decision + 25% reason code + 15% explanation + 10% amount zero |
-| `hard_policy_violation` | 48% decision + 27% reason code + 20% explanation + 5% process bonus |
-| `hard_duplicate_invoice` | 48% decision + 27% reason code + 20% explanation + 5% process bonus |
-| `hard_partial_po_match` | 45% amount (PO-covered lines only) + 38% decision + 12% reason code + 5% explanation |
-| `hard_tax_discrepancy` | 50% decision + 30% reason code + 20% explanation |
-
-**Amount accuracy tiers** (for tasks that partially score the approved amount):
-- Within 1%: full credit
-- Within 3%: 0.60–0.65
-- Within 8%: 0.30–0.40
-- Beyond 8%: near zero
-
-**Process bonus** (multi-step tasks only): +0.05 added if the agent uses the correct intermediate step before the right terminal decision. An agent that skips straight to REJECT on those tasks scores ~0.80 instead of ~0.85.
-
-All scores are in the open interval (0.01, 0.99).
+| Correctly flag fraudulent episode | +0.70 |
+| Explanation with specific numeric signal | +0.20 |
+| False positive (clean episode flagged) | −0.25 |
+| Correct CLEAR on clean episode | +0.01 base |
 
 ---
 
 ## API Reference
 
+### AP Clerk
 | Endpoint | Method | Description |
 |---|---|---|
-| `/health` | GET | Health check |
-| `/tasks` | GET | List all tasks with difficulty metadata |
-| `/reset` | POST | Start a new episode, returns observation + session_id |
-| `/step` | POST | Submit an action, returns reward + done |
-| `/state` | GET | Current session state |
-| `/docs` | GET | Swagger UI |
+| `/reset` | POST | Start episode: `{ task_id, seed? }` |
+| `/step` | POST | Submit action: `{ session_id, action }` |
+| `/state` | GET | Session state: `?session_id=...` |
 
-`seed` in `/reset` is optional. Omit for a random episode, or pass a fixed integer for a reproducible one.
+### Oversight Agent (Fleet AI)
+| Endpoint | Method | Description |
+|---|---|---|
+| `/oversight/reset` | POST | Start oversight session: `{ num_episodes?, seed? }` |
+| `/oversight/step` | POST | Submit verdict: `{ session_id, action: OversightAction }` |
+| `/oversight/state` | GET | Session state: `?session_id=...` |
+
+### Adaptive Curriculum
+| Endpoint | Method | Description |
+|---|---|---|
+| `/curriculum/next_task` | POST | Get next task: `{ session_history: [{ task_id, score }] }` |
+
+### Meta
+| Endpoint | Method | Description |
+|---|---|---|
+| `/tasks` | GET | List all 24 tasks |
+| `/health` | GET | Health check |
+| `/stats` | GET | Live episode statistics |
+| `/docs` | GET | Swagger UI |
 
 ---
 
 ## Project Structure
 
 ```
-├── Dockerfile            # Container definition (port 7860)
+├── Dockerfile
 ├── README.md
-├── openenv.yaml          # Environment spec: tasks, action space, endpoints
-├── inference.py          # Baseline agent — runs all 10 tasks, writes results.json
-├── validate.py           # Local pre-submit validator
+├── openenv.yaml                  # Environment spec: tasks, action spaces, endpoints
+├── inference.py                  # Baseline AP Clerk agent — runs all tasks, writes results.json
+├── sim_run.py                    # Optimal agent simulation for all 20 runnable tasks
 ├── requirements.txt
-└── app/
-    ├── main.py           # FastAPI server
-    ├── models.py         # Pydantic models: Observation, Action, Reward
-    ├── tasks.py          # Task generators and graders
-    └── environment.py    # APClerkEnvironment: reset() / step() / state()
+├── oversight_environment.py      # Fleet AI Oversight Environment
+├── app/
+│   ├── main.py                   # FastAPI server — all endpoints
+│   ├── models.py                 # Pydantic models: APObservation, OversightObservation, etc.
+│   ├── tasks.py                  # 24 task generators + graders + TASKS registry
+│   ├── environment.py            # APClerkEnvironment: reset() / step() / state()
+│   └── actors/
+│       ├── vendor_actor.py       # VendorActor (honest / fraudulent / confused)
+│       ├── manager_actor.py      # ManagerActor (budget authority, risk appetite)
+│       └── compliance_actor.py   # ComplianceActor (SOX / GDPR / Internal Policy)
+└── training/
+    └── colab_training.ipynb      # Unsloth GRPO training script
 ```
 
 ---
@@ -209,23 +259,40 @@ uvicorn app.main:app --host 0.0.0.0 --port 7860 --reload
 
 Open `http://localhost:7860/docs` for the interactive API docs.
 
-### Run inference
+### Run simulation (optimal agent)
+
+```bash
+python sim_run.py
+```
+
+Demonstrates all 20 AP Clerk tasks with a scripted optimal agent, prints scores per task and mean.
+
+### Run inference (LLM baseline)
 
 ```bash
 export HF_TOKEN="hf_..."
 export API_BASE_URL="https://router.huggingface.co/v1"
 export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 python inference.py
-```
 
-Scores are printed per task and written to `results.json`.
+# Run only long-horizon tasks
+TASK_FILTER=long python inference.py
+```
 
 ### Run with Docker
 
 ```bash
-docker build -t ap-clerk-env .
-docker run -p 7860:7860 ap-clerk-env
+docker build -t ap-commander .
+docker run -p 7860:7860 ap-commander
 ```
+
+### Train with GRPO (Unsloth)
+
+Open `training/colab_training.ipynb` in Google Colab (T4 GPU). The notebook:
+1. Loads Llama-3-8B-Instruct (4-bit quantized via Unsloth)
+2. Runs GRPO rollouts against the live environment
+3. Plots before/after reward curves across difficulty levels
+4. Pushes the fine-tuned model to HuggingFace Hub
 
 ---
 
@@ -233,6 +300,30 @@ docker run -p 7860:7860 ap-clerk-env
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `HF_TOKEN` | Yes | — | Hugging Face API token |
+| `HF_TOKEN` | Yes (inference) | — | HuggingFace API token |
 | `API_BASE_URL` | No | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint |
 | `MODEL_NAME` | No | `Qwen/Qwen2.5-72B-Instruct` | Model identifier |
+| `TASK_FILTER` | No | `""` | Filter tasks by prefix (e.g. `long`, `hard`) |
+| `RUN_OVERSIGHT` | No | `0` | Set to `1` to also run oversight tasks |
+
+---
+
+## Adaptive Curriculum — Difficulty Ladder
+
+```
+easy (mean ≥ 0.70) → medium (mean ≥ 0.65) → hard (mean ≥ 0.68) → long-horizon (mean ≥ 0.72) → oversight
+```
+
+The `/curriculum/next_task` endpoint tracks performance history and recommends the least-practiced task at the current unlocked difficulty level. This enables progressive skill building without manual task selection.
+
+---
+
+## HYPOTHETICAL Action (Self-Play)
+
+Long-horizon tasks support a special training-only action:
+
+```json
+{ "decision": "HYPOTHETICAL", "reason_code": "PRICE_DISCREPANCY", "explanation": "What if I reject here?" }
+```
+
+Returns a simulated outcome hint without committing to the decision. Allows the agent to explore counterfactual paths during training (score=0.01, episode continues).

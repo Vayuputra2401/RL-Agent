@@ -1,14 +1,18 @@
 """
-AP Clerk Environment — Core Environment Class
+AP Commander — Core AP Clerk Environment Class
 Implements the canonical OpenEnv interface: reset / step / state
 
-Multi-step support (v2):
+Multi-step support (v3):
   - Tasks with max_steps > 1 allow intermediate actions before the final decision.
   - QUERY_VENDOR / ESCALATE / HOLD are intermediate actions that reveal context
     and record history but do not end the episode (done=False).
+  - HYPOTHETICAL is a training-only action: returns a simulated outcome for an
+    alternative decision path without committing to it (done=False, score=0.01).
   - Any terminal action (APPROVE_FULL / APPROVE_PARTIAL / REJECT) ends the episode.
   - If the step limit is reached with an intermediate action still pending,
     the action is treated as terminal and graded immediately.
+  - Long-horizon tasks (max_steps 10-16) use the same mechanism — actors
+    (VendorActor, ManagerActor, ComplianceActor) generate context notes at reset.
 """
 
 from __future__ import annotations
@@ -22,12 +26,13 @@ _INTERMEDIATE = frozenset({
     DecisionType.QUERY_VENDOR,
     DecisionType.ESCALATE,
     DecisionType.HOLD,
+    DecisionType.HYPOTHETICAL,
 })
 
 
 class APClerkEnvironment:
     """
-    AI Accounts Payable Clerk — Three-Way Invoice Matching Environment.
+    AP Commander — AI Accounts Payable Clerk Environment.
 
     Episode flow (single-step tasks):
         obs = env.reset(task_id, seed=None)
@@ -39,8 +44,13 @@ class APClerkEnvironment:
         ...
         obs, reward, done, info = env.step(terminal_action)      # done=True
 
+    HYPOTHETICAL action (training-only):
+        obs, reward, done, info = env.step(hypothetical_action)
+        # done=False, reward.score=0.01, obs.context_notes contains simulated outcome
+
     seed=None produces a fresh random episode each call.
     A fixed integer seed produces a fully reproducible episode.
+    Long-horizon tasks (max_steps 10-16) use actors via pre-generated context notes.
     """
 
     def __init__(self) -> None:
@@ -88,11 +98,53 @@ class APClerkEnvironment:
         is_intermediate = action.decision in _INTERMEDIATE
         at_limit        = self._step_count >= self._max_steps
 
+        # ── HYPOTHETICAL action (training self-play, no context reveal) ─────────
+        if action.decision == DecisionType.HYPOTHETICAL and not at_limit:
+            self._observation.action_history.append({
+                "step":        self._step_count,
+                "decision":    "HYPOTHETICAL",
+                "reason_code": action.reason_code.value,
+                "explanation": action.explanation,
+            })
+            self._observation.step_count = self._step_count
+            # Simulate a brief outcome hint without revealing graded context
+            hint = (
+                f"[HYPOTHETICAL] If you chose {action.reason_code.value}: "
+                f"outcome would depend on whether the invoice data supports it. "
+                "Review the invoice total, PO amounts, and GRN quantities carefully before committing."
+            )
+            self._observation.context_notes.append(hint)
+            reward = APReward(
+                score=0.01,
+                breakdown={"hypothetical_step": action.reason_code.value},
+                feedback="Hypothetical path explored. Now commit to a real decision.",
+                done=False,
+            )
+            info: Dict[str, Any] = {
+                "task_id":    self._task_id,
+                "step_count": self._step_count,
+                "episode_score": 0.01,
+                "hypothetical": True,
+            }
+            return self._observation, reward, False, info
+
         # ── Intermediate action (episode continues) ───────────────────────────
         if is_intermediate and not at_limit:
-            # Reveal next pre-generated context note (if any)
+            # Reveal context note matched to the action type
             if self._context_store:
-                note = self._context_store.pop(0)
+                prefix_map = {
+                    DecisionType.ESCALATE:     "[MANAGER]",
+                    DecisionType.QUERY_VENDOR: "[VENDOR]",
+                    DecisionType.HOLD:         "[COMPLIANCE]",
+                }
+                preferred_prefix = prefix_map.get(action.decision, "")
+                # Try to find a note matching the action's prefix; fall back to FIFO
+                matched_idx = next(
+                    (i for i, n in enumerate(self._context_store)
+                     if preferred_prefix and n.startswith(preferred_prefix)),
+                    0,
+                )
+                note = self._context_store.pop(matched_idx)
                 self._observation.context_notes.append(note)
 
             # Record in history so graders can detect multi-step usage
@@ -122,7 +174,7 @@ class APClerkEnvironment:
                 ),
                 done=False,
             )
-            info: Dict[str, Any] = {
+            info = {
                 "task_id":    self._task_id,
                 "step_count": self._step_count,
                 "episode_score": 0.01,
