@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/        ./app/
 COPY openenv.yaml .
 COPY inference.py .
+COPY oversight_environment.py .
 
 EXPOSE 7860
 
