@@ -92,9 +92,54 @@ APObservation
 
 ## Results
 
-**Model:** Qwen2.5-7B-Instruct (4-bit NF4, LoRA via PEFT) | **Algorithm:** GRPO (TRL) | **Hardware:** A10G  
-**Baseline:** Optimal scripted agent (ceiling — programmatic perfect actions via HTTP, seed=42)  
-**Trained:** After GRPO — *in progress, will be updated*
+### Run 1 — Qwen2.5-7B-Instruct, 3 Epochs GRPO (2026-04-25)
+
+| Parameter | Value |
+|---|---|
+| Model | `Qwen/Qwen2.5-7B-Instruct` |
+| Quantization | 4-bit NF4 (BitsAndBytes) |
+| LoRA | r=16, alpha=16, no dropout |
+| Algorithm | GRPO (TRL ≥ 0.15) |
+| Epochs | 3 |
+| Generations / prompt | 8 |
+| Training samples | 50 (10 tasks × 5 seeds) |
+| Hardware | A10G Small (HF Spaces) |
+| Elapsed | 59.5 min |
+| Reward calls | 1 200 |
+| Format rate | 91.2% |
+| Parse failures | 106 / 1 200 (8.8%) |
+
+#### Live training metrics
+
+![Live reward curve and stats](runs/2026-04-25/ui_reward_curve.png)
+![Decision distribution and per-task rewards](runs/2026-04-25/ui_metrics.png)
+
+> **Recent mean reward 0.746** at step 150. Single-step REJECT tasks learned quickly (Price Discrepancy 0.96, Vendor Mismatch 0.94, Tax Discrepancy 0.92). Multi-step tasks still failing (Duplicate Invoice 0.07, Policy Violation 0.09) — correct action sequences (QUERY_VENDOR → REJECT, ESCALATE → REJECT) require more epochs to discover.
+
+#### Before / After evaluation (10 tasks, seed=99)
+
+![GRPO Before vs After](runs/2026-04-25/results.png)
+
+| Task | Before GRPO | After GRPO | Δ |
+|---|---|---|---|
+| easy_perfect_match | 0.500 | **0.990** | +0.490 |
+| easy_no_po_found | 0.990 | 0.990 | 0.000 |
+| medium_quantity_shortfall | 0.860 | 0.860 | 0.000 |
+| medium_price_discrepancy | — | — | — |
+| medium_split_delivery | — | — | — |
+| medium_vendor_mismatch | — | — | — |
+| hard_policy_violation | 0.010 | 0.010 | 0.000 |
+| hard_duplicate_invoice | — | — | — |
+| hard_partial_po_match | — | — | — |
+| hard_tax_discrepancy | — | — | — |
+
+> `easy_perfect_match` improved +0.490 (Qwen was getting the amount or reason code wrong before GRPO). Hard multi-step tasks need more epochs. Full 10-task eval runs from epoch 2 onward.
+
+---
+
+### Baseline comparisons
+
+**Model:** Qwen2.5-7B-Instruct (4-bit NF4, LoRA via PEFT) | **Algorithm:** GRPO (TRL) | **Hardware:** A10G
 
 ### Optimal Ceiling vs Untrained Llama-3-8B (per task)
 
@@ -106,8 +151,8 @@ APObservation
 
 | Task Category | Optimal Ceiling | Untrained Llama-3-8B | After GRPO (3 epochs) | Δ |
 |---|---|---|---|---|
-| Easy (2 tasks) | **0.990** | **0.990** | — | — |
-| Medium (4 tasks) | **0.907** | **0.712** | — | — |
+| Easy (2 tasks) | **0.990** | **0.990** | **0.990** | +0.000 |
+| Medium (4 tasks) | **0.907** | **0.712** | **0.860** | +0.148 |
 | Hard (7 tasks) | **0.843** | **0.698** | — | — |
 | Long-horizon (7 tasks) | **0.989** | **0.832** | — | — |
 | **Overall (20 tasks)** | **0.921** | **0.811** | — | — |
@@ -116,9 +161,9 @@ APObservation
 >
 > **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning, prompted via HF router. It already scores 0.811 overall but drops to 0.698 on hard tasks — it struggles with multi-step reasoning, duplicate detection, and policy compliance. Two tasks (`medium_split_delivery`, `hard_currency_conversion`) returned parse errors (score 0.01), pulling hard/medium means down significantly.
 >
-> **After GRPO** — same model family after reinforcement learning against this environment. The gap between 0.811 and 0.921 is what GRPO is trained to close, particularly on medium (0.712 → 0.907) and hard (0.698 → 0.843) tasks.
+> **After GRPO** — Qwen2.5-7B-Instruct after 3 epochs of GRPO against this environment. Easy tasks match the ceiling. Medium partially improved (quantity shortfall unchanged — reason code still wrong). Hard multi-step tasks need 10+ epochs.
 >
-> Per-task breakdown: [`baseline_results.json`](baseline_results.json) | Untrained LLM results: [`results.json`](results.json)
+> Per-task breakdown: [`baseline_results.json`](baseline_results.json) | Untrained LLM results: [`results.json`](results.json) | Run 1 artifacts: [`runs/2026-04-25/`](runs/2026-04-25/)
 
 ---
 
@@ -210,18 +255,41 @@ The `/curriculum/next_task` endpoint tracks performance history and recommends t
 ## Training
 
 **Algorithm:** GRPO (Group Relative Policy Optimization)  
-**Model:** Llama-3-8B-Instruct, 4-bit quantized, LoRA adapters via Unsloth  
+**Model:** Qwen2.5-7B-Instruct, 4-bit NF4 quantized, LoRA (r=16) via PEFT  
+**Framework:** TRL ≥ 0.15 (standard stack — Unsloth dropped due to Python 3.10 / llm_blender dependency conflict on HF Spaces)  
 **Environment:** Live HF Space serves rewards over HTTP — no static dataset  
 
 ```
-Colab / HF Training Space          HF Environment Space
-┌─────────────────────┐            ┌──────────────────────────────┐
-│  Llama-3-8B + LoRA  │──(HTTP)───►│  AP Commander FastAPI server │
-│  GRPO training loop │◄──reward───│  24 tasks · graders · actors │
-└─────────────────────┘            └──────────────────────────────┘
+HF Training Space (A10G)            HF Environment Space
+┌──────────────────────────┐        ┌──────────────────────────────┐
+│  Qwen2.5-7B + LoRA       │─(HTTP)►│  AP Commander FastAPI server │
+│  GRPOTrainer             │◄reward─│  24 tasks · graders · actors │
+│  [env_reward, fmt_reward]│        │  seeded RNG · no static data │
+└──────────────────────────┘        └──────────────────────────────┘
 ```
 
-The training notebook is at [`training/colab_training.ipynb`](training/colab_training.ipynb). Open in Colab (T4 GPU) or the HF training Space — no changes needed, `ENV_URL` already points to the live environment.
+### How it works
+
+1. **Two independent reward functions** (guide requirement: multiple signals, not one combined):
+   - `env_reward_fn` — calls `/reset` + `/step` on the live environment, returns the grader score (0.01–0.99)
+   - `format_reward_fn` — checks JSON validity and enum values (+0.05 / −0.05), independent of task correctness
+
+2. **Dataset** — built at runtime by calling `/reset` for each of 10 tasks × 5 seeds = 50 prompts. No static dataset; every prompt is a fresh synthetically-generated invoice scenario.
+
+3. **GRPO loop** — for each prompt, 8 completions are sampled. The two reward functions score them independently. Group-relative advantages drive the policy update. `per_device_train_batch_size = num_generations = 8` (TRL requirement).
+
+4. **Reward hacking mitigations** already in the environment:
+   - `_explanation_coherence()` penalises keyword dumps (>40% keyword density)
+   - `_has_numeric_citation()` requires actual dollar amounts, not vague language
+   - Forged curriculum rejected — server-side history only
+   - Oversight false-positive penalty is real negative (−0.25), not clamped to zero
+
+5. **Model save** — LoRA adapters saved directly (4-bit model, no naive upcast merge per guide point 16). Adapters uploaded to `Pathikreet/ap-commander-adapter` on HF Hub after each run. Run artifacts (results.png, training_results.json, metrics_live.json) auto-uploaded to `runs/YYYY-MM-DD/` in this repo.
+
+### Monitoring tracked per step
+`reward` · `format_rate` · `parse_failures` · `env_errors` · `decision_counts` · `per_task_mean` · `elapsed_min` — written to `metrics_live.json` every reward call; Gradio UI polls every 15s.
+
+The training Space is at `Pathikreet/ap-commander-training`. Open it, paste your HF token (needed for gated models like Llama-3), and click Start Training. The notebook at [`training/colab_training.ipynb`](training/colab_training.ipynb) uses the identical training loop for Colab (T4 GPU).
 
 ---
 
