@@ -106,10 +106,13 @@ APObservation
 | Long-horizon (7 tasks) | **0.989** | **0.832** | — | — |
 | **Overall (20 tasks)** | **0.921** | **0.811** | — | — |
 
-> **Optimal ceiling** = scripted agent with perfect domain knowledge (the upper bound).  
-> **Untrained Llama-3-8B** = `meta-llama/Meta-Llama-3-8B-Instruct` via HF router, no fine-tuning.  
-> Post-GRPO scores will be filled in once training completes.  
-> Per-task breakdown: [`baseline_results.json`](baseline_results.json) | LLM results: [`results.json`](results.json)
+> **Optimal ceiling** — not a model. A hardcoded Python script (`baseline.py`) that always applies the correct rule for each task: exact 3-way match arithmetic, correct decision type, precise amounts. It represents the best possible score the environment can return. It is not 1.0 because some reward components (explanation quality, seed-dependent actor responses) penalise even perfect decisions.
+>
+> **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning, prompted via HF router. It already scores 0.811 on easy/medium tasks but drops to 0.698 on hard tasks — it struggles with multi-step reasoning, duplicate detection, and policy compliance.
+>
+> **After GRPO** — same Llama model after reinforcement learning against this environment. The gap between 0.811 and 0.921 is what GRPO is trained to close, particularly on medium (0.712) and hard (0.698) tasks.
+>
+> Per-task breakdown: [`baseline_results.json`](baseline_results.json) | Untrained LLM results: [`results.json`](results.json)
 
 ---
 
