@@ -132,9 +132,20 @@ def main():
     os.makedirs(run_dir, exist_ok=True)
     print(f'[RUN] {MODEL_NAME}  →  {run_dir}')
 
-    print(f'[ENV] Checking {ENV_URL}...')
-    h = requests.get(f'{ENV_URL}/health', timeout=30).json()
-    print(f"[ENV] status={h['status']} tasks={h.get('total_tasks')}")
+    print(f'[ENV] Waking {ENV_URL}...')
+    for attempt in range(12):          # up to 2 min (12 × 10 s)
+        try:
+            resp = requests.get(f'{ENV_URL}/health', timeout=30)
+            if resp.status_code == 200 and resp.text.strip().startswith('{'):
+                h = resp.json()
+                print(f"[ENV] status={h['status']} tasks={h.get('total_tasks')}")
+                break
+            print(f'[ENV] attempt {attempt+1}: not ready (status={resp.status_code}), waiting 10 s...')
+        except Exception as e:
+            print(f'[ENV] attempt {attempt+1}: {e}, waiting 10 s...')
+        time.sleep(10)
+    else:
+        raise RuntimeError(f'Environment at {ENV_URL} did not become healthy after 120 s.')
 
     print(f'[MODEL] Loading {MODEL_NAME} (4-bit NF4, no LoRA)...')
     import torch
