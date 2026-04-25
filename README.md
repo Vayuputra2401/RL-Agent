@@ -92,11 +92,17 @@ APObservation
 
 ## Results
 
-**Model:** Llama-3-8B-Instruct (4-bit, LoRA via Unsloth) | **Algorithm:** GRPO | **Hardware:** A10G  
+**Model:** Qwen2.5-7B-Instruct (4-bit NF4, LoRA via PEFT) | **Algorithm:** GRPO (TRL) | **Hardware:** A10G  
 **Baseline:** Optimal scripted agent (ceiling — programmatic perfect actions via HTTP, seed=42)  
 **Trained:** After GRPO — *in progress, will be updated*
 
-![Baseline Reward Curves](baseline_plot.png)
+### Optimal Ceiling vs Untrained Llama-3-8B (per task)
+
+![Llama-3-8B vs Optimal Ceiling](llama_plot.png)
+
+### Optimal Ceiling — scripted agent on all tasks
+
+![Scripted Agent Reward Curves](baseline_plot.png)
 
 | Task Category | Optimal Ceiling | Untrained Llama-3-8B | After GRPO (3 epochs) | Δ |
 |---|---|---|---|---|
@@ -108,9 +114,9 @@ APObservation
 
 > **Optimal ceiling** — not a model. A hardcoded Python script (`baseline.py`) that always applies the correct rule for each task: exact 3-way match arithmetic, correct decision type, precise amounts. It represents the best possible score the environment can return. It is not 1.0 because some reward components (explanation quality, seed-dependent actor responses) penalise even perfect decisions.
 >
-> **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning, prompted via HF router. It already scores 0.811 on easy/medium tasks but drops to 0.698 on hard tasks — it struggles with multi-step reasoning, duplicate detection, and policy compliance.
+> **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning, prompted via HF router. It already scores 0.811 overall but drops to 0.698 on hard tasks — it struggles with multi-step reasoning, duplicate detection, and policy compliance. Two tasks (`medium_split_delivery`, `hard_currency_conversion`) returned parse errors (score 0.01), pulling hard/medium means down significantly.
 >
-> **After GRPO** — same Llama model after reinforcement learning against this environment. The gap between 0.811 and 0.921 is what GRPO is trained to close, particularly on medium (0.712) and hard (0.698) tasks.
+> **After GRPO** — same model family after reinforcement learning against this environment. The gap between 0.811 and 0.921 is what GRPO is trained to close, particularly on medium (0.712 → 0.907) and hard (0.698 → 0.843) tasks.
 >
 > Per-task breakdown: [`baseline_results.json`](baseline_results.json) | Untrained LLM results: [`results.json`](results.json)
 
