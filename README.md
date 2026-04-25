@@ -56,6 +56,40 @@ Episodes run up to **16 steps** on long-horizon tasks — fraud investigations, 
 
 ---
 
+## How the Data Works
+
+Every episode is **synthetically generated at runtime** — there is no static dataset. When the agent calls `/reset`, the environment produces a fresh, unique financial scenario from scratch using a seeded RNG.
+
+```
+POST /reset { task_id: "medium_quantity_shortfall", seed: 42 }
+  └── tasks.py: generate_medium_quantity_shortfall(seed=42)
+        └── Builds everything from scratch: vendor, item, quantities, prices, PO, GRN
+```
+
+The agent receives a structured `APObservation`:
+
+```
+APObservation
+├── invoice              ← vendor name, line items, unit prices, freight, total
+├── purchase_orders      ← 1 real OPEN PO + 1–2 distractor CLOSED POs (noise)
+├── goods_receipts       ← 1 real GRN + 1 wrong-vendor distractor GRN (noise)
+├── company_policy       ← text with randomised freight cap and price tolerance
+├── freight_cap          ← randomised each episode: $30 / $50 / $75 / $100
+├── price_tolerance      ← randomised each episode: 0.5% – 3.0%
+└── paid_invoice_ids     ← ledger of already-paid invoices (duplicate detection)
+```
+
+| What | Fixed or random? | Why |
+|---|---|---|
+| Task *type* (e.g. quantity shortfall) | Fixed by `task_id` | Defines the skill being trained |
+| Vendor, item, amounts, IDs | **Random per seed** | Agent cannot memorise — must reason |
+| Freight cap & price tolerance | **Random** | Agent must read policy each episode |
+| Distractor POs and GRNs | **Always present** | Forces genuine 3-way matching |
+
+**Same seed → identical episode.** This makes training and evaluation reproducible. Different seeds across training episodes prevent the agent from memorising amounts — it must learn the underlying reasoning pattern.
+
+---
+
 ## Results
 
 > **Training in progress — curves will appear here within 2 hours.**  
