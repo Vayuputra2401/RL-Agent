@@ -378,5 +378,6 @@ class OversightEnvironment:
             breakdown["explanation"] = round(expl_score, 2)
 
         raw = detect_score + expl_score
-        final = max(0.01, min(0.99, raw))
+        # Allow negative scores so false-positive penalty (-0.25) actually penalizes
+        final = max(-0.99, min(0.99, raw))
         return final, breakdown, " | ".join(parts)

@@ -138,6 +138,22 @@ def _has_numeric_citation(expl: str) -> bool:
     return bool(_re.search(r'\$\d[\d,.]*|\d+\.?\d*\s*%', expl))
 
 
+def _explanation_coherence(expl: str, hits: int) -> float:
+    """
+    Anti-keyword-salad multiplier in [0.5, 1.0].
+    Penalises short dumps where >40% of words are exact keyword matches.
+    Requires at least 8 words for full credit.
+    """
+    words = expl.split()
+    word_count = max(1, len(words))
+    if word_count < 8:
+        return 0.5
+    density = hits / word_count
+    if density > 0.40:
+        return 0.6  # keyword salad penalty
+    return 1.0
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TASK 1  —  Easy: Perfect Three-Way Match
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -467,8 +483,7 @@ def grade_medium_price(obs: APObservation, action: APAction) -> APReward:
     price_kws = ["price", "unit price", "agreed", "deviation", "discrepancy",
                  "higher", "markup", "overprice", "po price", "mismatch", "exceed"]
     hits       = sum(1 for kw in price_kws if kw in expl)
-    expl_score = min(1.0, hits / 3)   # harder: need 3 hits
-    # Penalise explanations that don't cite a specific dollar value or percentage
+    expl_score = min(1.0, hits / 3) * _explanation_coherence(expl, hits)
     if not _has_numeric_citation(expl):
         expl_score *= 0.5
 
@@ -581,7 +596,7 @@ def grade_hard_freight(obs: APObservation, action: APAction) -> APReward:
     freight_kws = ["freight", "shipping", "policy", f"${cap_str}", cap_str,
                    "unauthorized", "unapproved", "cap", "exceed", "approve"]
     hits         = sum(1 for kw in freight_kws if kw in expl)
-    expl_score   = min(1.0, hits / 4)   # harder: need 4 hits
+    expl_score   = min(1.0, hits / 4) * _explanation_coherence(expl, hits)
 
     # Multi-step process bonus: escalating before deciding shows correct AP procedure
     process_score = 0.10 if (escalated and action.decision == DecisionType.REJECT) else 0.0
@@ -684,7 +699,7 @@ def grade_hard_duplicate(obs: APObservation, action: APAction) -> APReward:
     dup_kws    = ["duplicate", "already paid", "previously", "paid", "again",
                   "twice", "ledger", "repeat", "resubmit", "prior"]
     hits       = sum(1 for kw in dup_kws if kw in expl)
-    expl_score = min(1.0, hits / 3)   # harder: need 3 hits
+    expl_score = min(1.0, hits / 3) * _explanation_coherence(expl, hits)
     # Bonus for citing the specific invoice ID — shows the agent actually checked the ledger
     if obs.invoice.invoice_id.lower() in expl:
         expl_score = min(1.0, expl_score + 0.30)
@@ -896,7 +911,7 @@ def grade_medium_vendor_mismatch(obs: APObservation, action: APAction) -> APRewa
         vendor_kws = ["vendor", "name", "mismatch", "different", "does not match",
                       "supplier", "policy", "verification"]
         hits = sum(1 for kw in vendor_kws if kw in expl)
-        expl_score = min(0.4, hits / 4)
+        expl_score = min(0.4, hits / 4) * _explanation_coherence(expl, hits)
 
     final = max(0.01, min(0.99, round(
         0.50 * decision_score + 0.25 * reason_score +
@@ -1023,7 +1038,7 @@ def grade_hard_partial_po(obs: APObservation, action: APAction) -> APReward:
     partial_kws = ["partial", "no po", "unauthorized", "not covered", "not authoris",
                    "only", "line item", "covered", "policy", "uncovered"]
     hits       = sum(1 for kw in partial_kws if kw in expl)
-    expl_score = min(1.0, hits / 3)
+    expl_score = min(1.0, hits / 3) * _explanation_coherence(expl, hits)
 
     final = max(0.01, min(0.99, round(
         0.45 * decision_score + 0.38 * amount_score +
@@ -1127,7 +1142,7 @@ def grade_hard_tax(obs: APObservation, action: APAction) -> APReward:
                  "not in po", "unapproved", "additional charge", "discrepancy",
                  f"${tax_str}", tax_str]
     hits       = sum(1 for kw in tax_kws if kw in expl)
-    expl_score = min(1.0, hits / 3)
+    expl_score = min(1.0, hits / 3) * _explanation_coherence(expl, hits)
 
     final = max(0.01, min(0.99, round(0.50 * decision_score + 0.30 * reason_score + 0.20 * expl_score, 3)))
 
@@ -1276,7 +1291,7 @@ def grade_hard_currency(obs: APObservation, action: APAction) -> APReward:
     fx_str  = str(fx_rate)
     conv_kws = ["eur", "usd", "convert", "exchange", "rate", fx_str, "foreign", "currency"]
     hits = sum(1 for kw in conv_kws if kw in expl)
-    expl_score = min(1.0, hits / 3)
+    expl_score = min(1.0, hits / 3) * _explanation_coherence(expl, hits)
     # Require at least one numeric citation (the converted value)
     if not _has_numeric_citation(expl):
         expl_score *= 0.5
@@ -1611,7 +1626,7 @@ def grade_hard_credit_memo(obs: APObservation, action: APAction) -> APReward:
     credit_kws = ["credit", "credit memo", "return", "refund", "negative", "debit",
                   "offset", "adjustment", "reversal"]
     hits = sum(1 for kw in credit_kws if kw in expl)
-    expl_score = min(1.0, hits / 2)   # need 2 hits
+    expl_score = min(1.0, hits / 2) * _explanation_coherence(expl, hits)
     if not _has_numeric_citation(expl):
         expl_score *= 0.5
 

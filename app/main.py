@@ -54,7 +54,14 @@ app.add_middleware(
 _sessions:           Dict[str, APClerkEnvironment]  = {}
 _oversight_sessions: Dict[str, OversightEnvironment] = {}
 _session_times:      Dict[str, datetime]             = {}
+_session_run_ids:    Dict[str, str]                  = {}  # session_id → run_id
 _SESSION_TTL = timedelta(hours=1)
+
+# Server-side curriculum history — populated by /step when done=True.
+# Keyed by run_id (X-Run-Id request header, or "default").
+# Rolling window of 200 entries per run_id to prevent unbounded growth.
+_curriculum_history: Dict[str, List[dict]] = {}
+_CURRICULUM_WINDOW = 200
 
 # In-memory stats counters
 _stats: Dict[str, Any] = {
@@ -73,6 +80,7 @@ def _prune_sessions() -> None:
         _sessions.pop(sid, None)
         _oversight_sessions.pop(sid, None)
         _session_times.pop(sid, None)
+        _session_run_ids.pop(sid, None)
 
 
 def _get_session(session_id: str) -> APClerkEnvironment:
@@ -146,18 +154,20 @@ async def list_tasks():
 
 
 @app.post("/reset", response_model=ResetResponse)
-async def reset(body: Optional[ResetRequest] = None):
+async def reset(body: Optional[ResetRequest] = None, request: Request = None):
     if body is None:
         body = ResetRequest()
     _prune_sessions()
     session_id = body.session_id or str(uuid.uuid4())
+    run_id = (request.headers.get("X-Run-Id", "default") if request else "default")
     env = APClerkEnvironment()
     try:
         obs = env.reset(body.task_id, seed=body.seed)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    _sessions[session_id]      = env
-    _session_times[session_id] = datetime.utcnow()
+    _sessions[session_id]          = env
+    _session_times[session_id]     = datetime.utcnow()
+    _session_run_ids[session_id]   = run_id
     # Track episode start in stats
     _stats["total_episodes"] += 1
     tid = body.task_id
@@ -188,6 +198,12 @@ async def step(body: StepRequest):
             _stats["task_counts"][tid] = {"count": 0, "score_sum": 0.0}
         _stats["task_counts"][tid]["count"]     += 1
         _stats["task_counts"][tid]["score_sum"] += reward.score
+        # Record in server-side curriculum history (keyed by run_id from /reset)
+        run_id = _session_run_ids.get(body.session_id, "default")
+        bucket = _curriculum_history.setdefault(run_id, [])
+        bucket.append({"task_id": tid, "score": reward.score})
+        if len(bucket) > _CURRICULUM_WINDOW:
+            del bucket[:-_CURRICULUM_WINDOW]
     logger.info(
         "step   session=%s  decision=%s  score=%.3f",
         body.session_id, body.action.decision, reward.score,
@@ -310,28 +326,41 @@ for _tid, _spec in TASKS.items():
 
 
 @app.post("/curriculum/next_task", response_model=CurriculumResponse)
-async def curriculum_next_task(body: Optional[CurriculumRequest] = None):
+async def curriculum_next_task(body: Optional[CurriculumRequest] = None, request: Request = None):
     """
-    Recommend the next task based on the agent's session history.
+    Recommend the next task based on server-verified episode history.
 
-    Send a list of {task_id, score} pairs representing recently completed episodes.
-    The curriculum engine selects the appropriate difficulty level and picks
-    the least-recently-practiced task at that level.
+    The curriculum uses server-side records populated by /step completions.
+    Client-provided session_history is accepted only as a cold-start fallback
+    when no server-side history exists for this run_id.
 
     Difficulty ladder: easy → medium → hard → long-horizon → oversight
     """
     if body is None:
         body = CurriculumRequest()
 
-    history = body.session_history  # list of CurriculumEntry
+    run_id = (request.headers.get("X-Run-Id", "default") if request else "default")
+    server_history = _curriculum_history.get(run_id, [])
+
+    # Use server-side history; fall back to client only when server has no data
+    if server_history:
+        raw_history = server_history
+    else:
+        raw_history = [{"task_id": e.task_id, "score": e.score}
+                       for e in body.session_history]
+
+    history = raw_history  # list of dicts with task_id + score
 
     # Compute mean score per difficulty level from recent history
+    # history entries are dicts: {"task_id": str, "score": float}
     scores_by_diff: Dict[str, List[float]] = {}
     for entry in history:
-        spec = TASKS.get(entry.task_id)
+        tid  = entry["task_id"] if isinstance(entry, dict) else entry.task_id
+        sc   = entry["score"]   if isinstance(entry, dict) else entry.score
+        spec = TASKS.get(tid)
         if spec:
             diff = spec.difficulty
-            scores_by_diff.setdefault(diff, []).append(entry.score)
+            scores_by_diff.setdefault(diff, []).append(sc)
 
     mean_by_diff = {
         d: sum(s) / len(s) for d, s in scores_by_diff.items() if s
@@ -357,7 +386,8 @@ async def curriculum_next_task(body: Optional[CurriculumRequest] = None):
 
     practiced_counts: Dict[str, int] = {}
     for entry in history:
-        practiced_counts[entry.task_id] = practiced_counts.get(entry.task_id, 0) + 1
+        tid = entry["task_id"] if isinstance(entry, dict) else entry.task_id
+        practiced_counts[tid] = practiced_counts.get(tid, 0) + 1
 
     recommended = min(available, key=lambda tid: practiced_counts.get(tid, 0))
 
