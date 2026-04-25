@@ -3,7 +3,7 @@ baseline.py — Optimal scripted agent baseline against live HF Space.
 Runs all 20 runnable tasks via HTTP, records every step, saves JSON + plots.
 Usage: python baseline.py
 """
-import json, re, time, datetime
+import json, os, re, time, datetime
 import requests
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -11,8 +11,13 @@ import numpy as np
 
 ENV = 'https://pathikreet-ap-clerk-env.hf.space'
 SEED = 42
-OUT_JSON = 'baseline_results.json'
-OUT_PLOT = 'baseline_plot.png'
+
+# Outputs go into runs/baselines/scripted-agent-DATETIME/ so runs never overwrite each other
+_RUN_DIR = os.path.join('runs', 'baselines',
+                        f'scripted-agent-{datetime.datetime.now().strftime("%Y-%m-%d_%H%M")}')
+os.makedirs(_RUN_DIR, exist_ok=True)
+OUT_JSON = os.path.join(_RUN_DIR, 'baseline_results.json')
+OUT_PLOT = os.path.join(_RUN_DIR, 'baseline_plot.png')
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

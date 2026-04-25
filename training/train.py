@@ -458,6 +458,15 @@ def eval_task(model, tokenizer, task_id: str, seed: int = 99) -> float:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+def _make_run_dir() -> str:
+    """Create timestamped run directory under /app/runs/grpo/MODEL-NEpoch-DATETIME."""
+    model_slug = MODEL_NAME.split('/')[-1].lower().replace('.', '-')
+    ts = datetime.datetime.now().strftime('%Y-%m-%d_%H%M')
+    run_dir = f'/app/runs/grpo/{model_slug}-{NUM_EPOCHS}ep-{ts}'
+    os.makedirs(run_dir, exist_ok=True)
+    return run_dir
+
+
 def main():
     # Authenticate with HF Hub if token provided (needed for gated models like Llama-3)
     hf_token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
@@ -467,6 +476,10 @@ def main():
         print('[AUTH] Logged in to HF Hub.')
     else:
         print('[AUTH] No HF_TOKEN set — using public models only (Qwen recommended).')
+
+    # All run artifacts go into this timestamped dir — never overwrite a previous run
+    RUN_DIR = _make_run_dir()
+    print(f'[RUN] Artifacts → {RUN_DIR}')
 
     print(f'[ENV] Checking {ENV_URL}...')
     h = requests.get(f'{ENV_URL}/health', timeout=30).json()
@@ -573,23 +586,23 @@ def main():
     print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
 
     METRICS.print_summary()
-    METRICS.save_reward_curve('/app/reward_curve.png')
+    METRICS.save_reward_curve(os.path.join(RUN_DIR, 'reward_curve.png'))
 
     # Save LoRA adapters (guide point 16: save adapters directly, do NOT merge 4-bit naively)
-    print('[SAVE] Saving LoRA adapters...')
-    model.save_pretrained('/app/ap_commander_adapter')
-    tokenizer.save_pretrained('/app/ap_commander_adapter')
-    print('[SAVE] Adapters saved to /app/ap_commander_adapter')
+    adapter_dir = os.path.join(RUN_DIR, 'adapter')
+    print(f'[SAVE] Saving LoRA adapters to {adapter_dir}...')
+    model.save_pretrained(adapter_dir)
+    tokenizer.save_pretrained(adapter_dir)
 
     # Upload adapter to HF Hub as a model repo
     try:
         from huggingface_hub import HfApi
         api = HfApi()
         api.upload_folder(
-            folder_path='/app/ap_commander_adapter',
-            repo_id=f'Pathikreet/ap-commander-adapter',
+            folder_path=adapter_dir,
+            repo_id='Pathikreet/ap-commander-adapter',
             repo_type='model',
-            commit_message=f'GRPO run {datetime.datetime.now().strftime("%Y-%m-%d")} — {MODEL_NAME} {NUM_EPOCHS}ep',
+            commit_message=f'GRPO {datetime.datetime.now().strftime("%Y-%m-%d")} — {MODEL_NAME} {NUM_EPOCHS}ep',
         )
         print('[SAVE] Adapter pushed to HF Hub: Pathikreet/ap-commander-adapter')
     except Exception as e:
@@ -693,20 +706,23 @@ def main():
         ax4.set_xlabel('Training Step', color='#c9d1d9', fontsize=8)
     _dark(ax4, 'Reward Curve')
 
-    fmt_rate = sum(METRICS.format_scores) / max(1, len(METRICS.format_scores))
+    _fmt_rate = sum(METRICS.format_scores) / max(1, len(METRICS.format_scores))
     fig.suptitle(
         f'AP Commander GRPO — {MODEL_NAME} | {NUM_EPOCHS} epochs | '
-        f'{NUM_GENERATIONS} gen | format={fmt_rate:.1%} | '
+        f'{NUM_GENERATIONS} gen | format={_fmt_rate:.1%} | '
         f'parse_fails={METRICS.parse_failures} | {datetime.datetime.now().strftime("%Y-%m-%d")}',
         color='#e6edf3', fontsize=9, y=0.98
     )
-    plt.savefig('/app/results.png', dpi=130, bbox_inches='tight', facecolor=fig.get_facecolor())
+    results_png = os.path.join(RUN_DIR, 'results.png')
+    plt.savefig(results_png, dpi=130, bbox_inches='tight', facecolor=fig.get_facecolor())
     plt.close()
-    print('[DONE] Saved results.png')
+    print(f'[DONE] Saved {results_png}')
 
     # Save JSON
+    fmt_rate = sum(METRICS.format_scores) / max(1, len(METRICS.format_scores))
     output = {
         'timestamp':       datetime.datetime.now().isoformat(),
+        'run_dir':         RUN_DIR,
         'model':           MODEL_NAME,
         'epochs':          NUM_EPOCHS,
         'num_generations': NUM_GENERATIONS,
@@ -726,27 +742,33 @@ def main():
             'per_task_mean':      {t: round(sum(v)/len(v), 4) for t, v in METRICS.reward_by_task.items()},
         },
     }
-    with open('/app/training_results.json', 'w') as f:
+    results_json = os.path.join(RUN_DIR, 'training_results.json')
+    with open(results_json, 'w') as f:
         json.dump(output, f, indent=2)
-    print('[DONE] Saved training_results.json')
+    print(f'[DONE] Saved {results_json}')
 
-    # Persist artifacts to HF Space repo so they survive container restarts
-    run_date = datetime.datetime.now().strftime('%Y-%m-%d')
+    # Copy live metrics into run dir as snapshot
+    try:
+        import shutil
+        shutil.copy('/app/metrics_live.json', os.path.join(RUN_DIR, 'metrics_live.json'))
+    except Exception:
+        pass
+
+    # Persist entire run dir to HF Space repo (runs/grpo/MODEL-NEP-DATETIME/)
+    # so artifacts survive container restarts and each run is independently addressable
+    repo_run_path = RUN_DIR.replace('/app/', '')  # strip /app/ prefix for repo path
     try:
         from huggingface_hub import HfApi
         api = HfApi()
-        for local, remote in [
-            ('/app/results.png',           f'runs/{run_date}/results.png'),
-            ('/app/reward_curve.png',      f'runs/{run_date}/reward_curve.png'),
-            ('/app/training_results.json', f'runs/{run_date}/training_results.json'),
-            ('/app/metrics_live.json',     f'runs/{run_date}/metrics_live.json'),
-        ]:
-            try:
-                api.upload_file(path_or_fileobj=local, path_in_repo=remote,
-                                repo_id='Pathikreet/ap-commander-training', repo_type='space')
-                print(f'[UPLOAD] {remote}')
-            except Exception as ue:
-                print(f'[UPLOAD] skipped {remote}: {ue}')
+        api.upload_folder(
+            folder_path=RUN_DIR,
+            path_in_repo=repo_run_path,
+            repo_id='Pathikreet/ap-commander-training',
+            repo_type='space',
+            commit_message=f'Run artifacts: {os.path.basename(RUN_DIR)}',
+            ignore_patterns=['adapter/*'],  # adapter uploaded separately to model repo
+        )
+        print(f'[UPLOAD] Run folder → {repo_run_path} in Pathikreet/ap-commander-training')
     except Exception as e:
         print(f'[UPLOAD] artifact upload failed: {e}')
 
