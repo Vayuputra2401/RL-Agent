@@ -92,20 +92,23 @@ APObservation
 
 ## Results
 
-> **Training in progress — curves will appear here within 2 hours.**  
-> Model: Llama-3-8B-Instruct (4-bit, LoRA via Unsloth) | Algorithm: GRPO | Hardware: A10G
+**Model:** Llama-3-8B-Instruct (4-bit, LoRA via Unsloth) | **Algorithm:** GRPO | **Hardware:** A10G  
+**Baseline:** Optimal scripted agent (ceiling — programmatic perfect actions via HTTP, seed=42)  
+**Trained:** After GRPO — *in progress, will be updated*
 
-<!-- RESULTS_PLACEHOLDER -->
-![Reward Curves](results.png)
+![Baseline Reward Curves](baseline_plot.png)
 
-| Task Category | Baseline (untrained) | After GRPO (3 epochs) | Δ |
-|---|---|---|---|
-| Easy (perfect match, no PO) | — | — | — |
-| Medium (quantity shortfall, price discrepancy) | — | — | — |
-| Hard (policy violation, duplicate invoice) | — | — | — |
-| Long-horizon (fraud investigation, audit trail) | — | — | — |
+| Task Category | Optimal Baseline | Untrained Llama | After GRPO (3 epochs) | Δ (trained vs untrained) |
+|---|---|---|---|---|
+| Easy (2 tasks) | **0.990** | — | — | — |
+| Medium (4 tasks) | **0.907** | — | — | — |
+| Hard (7 tasks) | **0.749** | — | — | — |
+| Long-horizon (7 tasks) | **0.989** | — | — | — |
+| **Overall (20 tasks)** | **0.889** | — | — | — |
 
-*Numbers will be filled in once the training run completes.*
+> Optimal baseline = scripted agent with perfect domain knowledge (the ceiling).  
+> Untrained Llama and post-GRPO scores will be filled in once training completes.  
+> Full per-task breakdown with step-level rewards: [`baseline_results.json`](baseline_results.json)
 
 ---
 
