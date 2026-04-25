@@ -167,23 +167,27 @@ Run `training/eval_baseline.py` on the HF Training Space to generate this. Resul
 
 ![Llama-3-8B vs Optimal Ceiling](runs/baselines/llama-3-8b-2026-04-25/llama_plot.png)
 
+#### Untrained Qwen2.5-7B-Instruct baseline (17 tasks, 3 seeds each)
+
+![Qwen2.5-7B Baseline](runs/baselines/qwen2-5-7b-instruct-2026-04-25/baseline_plot.png)
+
 | Task Category | Optimal Ceiling | Untrained Llama-3-8B | Untrained Qwen2.5-7B | After GRPO 3ep |
 |---|---|---|---|---|
-| Easy (2 tasks) | **0.990** | **0.990** | **0.745** | **0.990** |
-| Medium (4 tasks) | **0.907** | **0.712** | **0.860** | **0.860** |
-| Hard (10 tasks, 3 train) | **0.843** | **0.698** | **~0.010** | — |
-| Long-horizon (7 tasks) | **0.989** | **0.832** | — | — |
-| **Overall** | **0.921** | **0.811** | — | — |
+| Easy (2 tasks) | **0.990** | **0.990** | **0.721** | **0.990** |
+| Medium (4 tasks) | **0.907** | **0.712** | **0.691** | **0.860** |
+| Hard (4 tasks) | **0.843** | **0.698** | **0.468** | — |
+| Long-horizon (7 tasks) | **0.989** | **0.832** | **0.432** | — |
+| **Overall** | **0.921** | **0.811** | **0.535** | — |
 
 > **Optimal ceiling** — a hardcoded scripted agent (`baseline.py`) that applies the exact correct rule for every task. Not 1.0 because explanation quality, seed-dependent actor responses, and partial-credit graders penalise even perfect decisions.
 >
-> **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning. Scores 0.811 overall but drops to 0.698 on hard tasks. Two tasks returned parse errors (score 0.01).
+> **Untrained Llama-3-8B** — `meta-llama/Meta-Llama-3-8B-Instruct` with no fine-tuning. Scores 0.811 overall but drops to 0.698 on hard tasks.
 >
-> **Untrained Qwen2.5-7B** — before GRPO. Easy tasks partially solved. Hard multi-step tasks near 0.01.
+> **Untrained Qwen2.5-7B** — `Qwen/Qwen2.5-7B-Instruct` before GRPO, 17 tasks × 3 seeds. Mean 0.535 overall; 7/51 parse failures. Hard tasks (0.468) and long-horizon tasks (0.432) near floor — multi-step sequences undiscovered without training.
 >
 > **After GRPO** — Qwen2.5-7B after 3 epochs. Easy tasks match the ceiling. Hard multi-step tasks need more epochs.
 >
-> Detailed breakdowns: [`runs/baselines/scripted-agent-2026-04-25/`](runs/baselines/scripted-agent-2026-04-25/) | [`runs/grpo/qwen-2.5-7b-3ep-2026-04-25/`](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/)
+> Detailed breakdowns: [`runs/baselines/qwen2-5-7b-instruct-2026-04-25/`](runs/baselines/qwen2-5-7b-instruct-2026-04-25/) | [`runs/baselines/scripted-agent-2026-04-25/`](runs/baselines/scripted-agent-2026-04-25/) | [`runs/grpo/qwen-2.5-7b-3ep-2026-04-25/`](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/)
 
 ---
 

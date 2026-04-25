@@ -905,18 +905,22 @@ def main():
     tokenizer.save_pretrained(adapter_dir)
 
     # Upload adapter to HF Hub as a model repo
-    try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        api.upload_folder(
-            folder_path=adapter_dir,
-            repo_id='Pathikreet/ap-commander-adapter',
-            repo_type='model',
-            commit_message=f'GRPO {datetime.datetime.now().strftime("%Y-%m-%d")} — {MODEL_NAME} {NUM_EPOCHS}ep',
-        )
-        print('[SAVE] Adapter pushed to HF Hub: Pathikreet/ap-commander-adapter')
-    except Exception as e:
-        print(f'[SAVE] HF Hub upload skipped: {e}')
+    hf_token_save = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
+    if hf_token_save:
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=hf_token_save)
+            api.upload_folder(
+                folder_path=adapter_dir,
+                repo_id='Pathikreet/ap-commander-adapter',
+                repo_type='model',
+                commit_message=f'GRPO {datetime.datetime.now().strftime("%Y-%m-%d")} — {MODEL_NAME} {NUM_EPOCHS}ep',
+            )
+            print('[SAVE] Adapter pushed to HF Hub: Pathikreet/ap-commander-adapter')
+        except Exception as e:
+            print(f'[SAVE] HF Hub upload skipped: {e}')
+    else:
+        print('[SAVE] HF Hub upload skipped: HF_TOKEN not set')
 
     # Post-training eval (all 10 tasks)
     print('\n[POST-EVAL] After training:')
@@ -1077,20 +1081,24 @@ def main():
     # Persist entire run dir to HF Space repo (runs/grpo/MODEL-NEP-DATETIME/)
     # so artifacts survive container restarts and each run is independently addressable
     repo_run_path = RUN_DIR.replace('/app/', '')  # strip /app/ prefix for repo path
-    try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        api.upload_folder(
-            folder_path=RUN_DIR,
-            path_in_repo=repo_run_path,
-            repo_id='Pathikreet/ap-commander-training',
-            repo_type='space',
-            commit_message=f'Run artifacts: {os.path.basename(RUN_DIR)}',
-            ignore_patterns=['adapter/*'],  # adapter uploaded separately to model repo
-        )
-        print(f'[UPLOAD] Run folder → {repo_run_path} in Pathikreet/ap-commander-training')
-    except Exception as e:
-        print(f'[UPLOAD] artifact upload failed: {e}')
+    hf_token_up = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
+    if hf_token_up:
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=hf_token_up)
+            api.upload_folder(
+                folder_path=RUN_DIR,
+                path_in_repo=repo_run_path,
+                repo_id='Pathikreet/ap-commander-training',
+                repo_type='space',
+                commit_message=f'Run artifacts: {os.path.basename(RUN_DIR)}',
+                ignore_patterns=['adapter/*'],  # adapter uploaded separately to model repo
+            )
+            print(f'[UPLOAD] Run folder → {repo_run_path} in Pathikreet/ap-commander-training')
+        except Exception as e:
+            print(f'[UPLOAD] artifact upload failed: {e}')
+    else:
+        print('[UPLOAD] artifact upload skipped: HF_TOKEN not set')
 
 
 if __name__ == '__main__':

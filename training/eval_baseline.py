@@ -298,19 +298,23 @@ def main():
 
     # Upload run folder to HF Space repo
     repo_run_path = run_dir.replace('/app/', '')
-    try:
-        from huggingface_hub import HfApi
-        api = HfApi()
-        api.upload_folder(
-            folder_path=run_dir,
-            path_in_repo=repo_run_path,
-            repo_id='Pathikreet/ap-commander-training',
-            repo_type='space',
-            commit_message=f'Baseline: {model_short} untrained {ts}',
-        )
-        print(f'[UPLOAD] {repo_run_path} → Pathikreet/ap-commander-training')
-    except Exception as e:
-        print(f'[UPLOAD] skipped: {e}')
+    hf_token_up = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
+    if hf_token_up:
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=hf_token_up)
+            api.upload_folder(
+                folder_path=run_dir,
+                path_in_repo=repo_run_path,
+                repo_id='Pathikreet/ap-commander-training',
+                repo_type='space',
+                commit_message=f'Baseline: {model_short} untrained {ts}',
+            )
+            print(f'[UPLOAD] {repo_run_path} → Pathikreet/ap-commander-training')
+        except Exception as e:
+            print(f'[UPLOAD] skipped: {e}')
+    else:
+        print('[UPLOAD] skipped: HF_TOKEN not set')
 
     print(f'\n[DONE] Results in {run_dir}')
     return output
