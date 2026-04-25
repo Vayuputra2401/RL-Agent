@@ -23,15 +23,24 @@ EVAL_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
+    'long_invoice_dispute', 'long_policy_migration',
+    'long_batch_reconciliation', 'long_manager_chain',
+    'long_fraud_investigation', 'long_audit_trail',
+    'long_multi_vendor_split',
 ]
 TASK_DIFFICULTY = {
-    'easy_perfect_match': 'easy',      'easy_no_po_found': 'easy',
+    'easy_perfect_match': 'easy',       'easy_no_po_found': 'easy',
     'medium_quantity_shortfall':'medium','medium_price_discrepancy':'medium',
-    'medium_split_delivery':'medium',   'medium_vendor_mismatch':'medium',
-    'hard_policy_violation':'hard',     'hard_duplicate_invoice':'hard',
-    'hard_partial_po_match':'hard',     'hard_tax_discrepancy':'hard',
+    'medium_split_delivery':'medium',    'medium_vendor_mismatch':'medium',
+    'hard_policy_violation':'hard',      'hard_duplicate_invoice':'hard',
+    'hard_partial_po_match':'hard',      'hard_tax_discrepancy':'hard',
+    'long_invoice_dispute':'long',       'long_policy_migration':'long',
+    'long_batch_reconciliation':'long',  'long_manager_chain':'long',
+    'long_fraud_investigation':'long',   'long_audit_trail':'long',
+    'long_multi_vendor_split':'long',
 }
-DIFF_COLORS = {'easy': '#3fb950', 'medium': '#d29922', 'hard': '#f85149'}
+DIFF_COLORS = {'easy': '#3fb950', 'medium': '#d29922', 'hard': '#f85149', 'long': '#a371f7'}
+DIFF_ORDER  = ['easy', 'medium', 'hard', 'long']
 
 SYSTEM_PROMPT = """You are an AI Accounts Payable Clerk. Review the invoice, PO, and GRN, then output ONLY valid JSON:
 {"decision": "APPROVE_FULL"|"APPROVE_PARTIAL"|"REJECT"|"ESCALATE"|"QUERY_VENDOR",
@@ -171,7 +180,7 @@ def main():
     by_diff = {}
     for tid, v in results.items():
         by_diff.setdefault(v['difficulty'], []).append(v['mean'])
-    for diff in ['easy', 'medium', 'hard']:
+    for diff in DIFF_ORDER:
         ms = by_diff.get(diff, [])
         if ms:
             print(f"  {diff:<8}: mean={sum(ms)/len(ms):.3f}  tasks={[round(m,3) for m in ms]}")
@@ -202,7 +211,7 @@ def main():
     print(f'[SAVED] {json_path}')
 
     # ── Plots ───────────────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=(16, 9))
+    fig = plt.figure(figsize=(16, max(9, len(results) * 0.5 + 2)))
     fig.patch.set_facecolor('#0d1117')
     gs  = fig.add_gridspec(1, 2, wspace=0.30)
 
@@ -217,12 +226,13 @@ def main():
         if xlabel: ax.set_xlabel(xlabel, color='#8b949e', fontsize=8)
         if ylabel: ax.set_ylabel(ylabel, color='#8b949e', fontsize=8)
 
-    # Panel 1: Per-task mean score (horizontal bar)
+    # Panel 1: Per-task mean score (horizontal bar), ordered by difficulty
     ax1 = fig.add_subplot(gs[0, 0])
-    tasks  = list(results.keys())
+    tasks  = sorted(results.keys(),
+                    key=lambda t: (DIFF_ORDER.index(results[t]['difficulty']), t))
     means  = [results[t]['mean'] for t in tasks]
     colors = [DIFF_COLORS[results[t]['difficulty']] for t in tasks]
-    short  = [t.replace('easy_','').replace('medium_','').replace('hard_','')
+    short  = [t.replace('easy_','').replace('medium_','').replace('hard_','').replace('long_','')
                .replace('_',' ').title() for t in tasks]
     yp = range(len(tasks))
     bars = ax1.barh(list(yp), means, color=colors, alpha=0.85, edgecolor='#0d1117')
@@ -240,11 +250,12 @@ def main():
                                   label=f'Mean {overall:.3f}'))
     ax1.legend(handles=legend_els, fontsize=8, facecolor='#161b22',
                edgecolor='#30363d', labelcolor='#c9d1d9', loc='lower right')
-    _dark(ax1, f'Per-Task Mean Score ({len(SEEDS)} seeds)', ylabel='Score (0.01–0.99)')
+    _dark(ax1, f'Untrained Baseline — Per-Task Mean Score ({len(SEEDS)} seeds)',
+          xlabel='Mean Score  [0.01 – 0.99]', ylabel='Task')
 
-    # Panel 2: Mean by difficulty + decision distribution
+    # Panel 2: Mean by difficulty
     ax2 = fig.add_subplot(gs[0, 1])
-    diffs = ['easy', 'medium', 'hard']
+    diffs = [d for d in DIFF_ORDER if d in by_diff]
     d_means = [sum(by_diff.get(d, [0])) / max(1, len(by_diff.get(d, [0]))) for d in diffs]
     d_colors = [DIFF_COLORS[d] for d in diffs]
     bars2 = ax2.bar(diffs, d_means, color=d_colors, alpha=0.85, edgecolor='#0d1117', width=0.5)
@@ -255,14 +266,20 @@ def main():
     ax2.axhline(overall, color='#f78166', linestyle='--', linewidth=1,
                 label=f'Overall {overall:.3f}')
     ax2.legend(fontsize=8, facecolor='#161b22', edgecolor='#30363d', labelcolor='#c9d1d9')
-    _dark(ax2, 'Mean Score by Difficulty', ylabel='Mean Score')
+    _dark(ax2, 'Mean Score by Difficulty Tier',
+          xlabel='Difficulty Tier', ylabel='Mean Score  [0.01 – 0.99]')
 
     model_short = MODEL_NAME.split('/')[-1]
     fig.suptitle(
         f'{model_short} — Untrained Baseline  |  4-bit NF4  |  {len(SEEDS)} seeds  |  '
-        f'overall={overall:.3f}  |  {datetime.datetime.now().strftime("%Y-%m-%d")}',
-        color='#e6edf3', fontsize=10, y=0.98
+        f'{len(EVAL_TASKS)} tasks  |  overall={overall:.3f}  |  '
+        f'{datetime.datetime.now().strftime("%Y-%m-%d")}',
+        color='#e6edf3', fontsize=10, y=1.01
     )
+    fig.text(0.5, 0.0,
+             'Baseline = model loaded 4-bit NF4 with no fine-tuning. '
+             'Score range [0.01, 0.99]. Tasks: easy (green), medium (yellow), hard (red), long-horizon (purple).',
+             ha='center', color='#8b949e', fontsize=7, style='italic')
     plot_path = os.path.join(run_dir, 'baseline_plot.png')
     plt.savefig(plot_path, dpi=130, bbox_inches='tight', facecolor=fig.get_facecolor())
     plt.close()

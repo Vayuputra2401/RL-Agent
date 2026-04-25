@@ -28,6 +28,10 @@ TRAIN_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
+    'long_invoice_dispute', 'long_policy_migration',
+    'long_batch_reconciliation', 'long_manager_chain',
+    'long_fraud_investigation', 'long_audit_trail',
+    'long_multi_vendor_split',
 ]
 EVAL_TASKS = [
     'easy_perfect_match', 'easy_no_po_found',
@@ -35,6 +39,10 @@ EVAL_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
+    'long_invoice_dispute', 'long_policy_migration',
+    'long_batch_reconciliation', 'long_manager_chain',
+    'long_fraud_investigation', 'long_audit_trail',
+    'long_multi_vendor_split',
 ]
 
 VALID_DECISIONS   = {'APPROVE_FULL','APPROVE_PARTIAL','REJECT','ESCALATE','QUERY_VENDOR','HOLD'}
@@ -49,9 +57,13 @@ _TASK_DIFFICULTY = {
     'medium_split_delivery': 'medium',    'medium_vendor_mismatch': 'medium',
     'hard_policy_violation': 'hard',      'hard_duplicate_invoice': 'hard',
     'hard_partial_po_match': 'hard',      'hard_tax_discrepancy': 'hard',
+    'long_invoice_dispute': 'long',       'long_policy_migration': 'long',
+    'long_batch_reconciliation': 'long',  'long_manager_chain': 'long',
+    'long_fraud_investigation': 'long',   'long_audit_trail': 'long',
+    'long_multi_vendor_split': 'long',
 }
-_DIFFICULTY_ORDER  = ['easy', 'medium', 'hard']
-_UNLOCK_THRESHOLDS = {'easy': 0.70, 'medium': 0.65}
+_DIFFICULTY_ORDER  = ['easy', 'medium', 'hard', 'long']
+_UNLOCK_THRESHOLDS = {'easy': 0.70, 'medium': 0.65, 'hard': 0.60}
 
 
 # ── Curriculum sampler ──────────────────────────────────────────────────────────
@@ -101,10 +113,11 @@ class CurriculumSampler:
           easy  → 10 seeds  (always included)
           medium → 5 seeds  (if unlocked)
           hard   → 2 seeds  (if unlocked)
+          long   → 2 seeds  (if unlocked)
         Returns list of (task_id, seed) pairs.
         """
         rows = []
-        seeds_per_diff = {'easy': 10, 'medium': 5, 'hard': 2}
+        seeds_per_diff = {'easy': 10, 'medium': 5, 'hard': 2, 'long': 2}
         for task_id, diff in _TASK_DIFFICULTY.items():
             if diff in self.unlocked:
                 n = seeds_per_diff[diff]
@@ -176,27 +189,57 @@ def _greedy_followup(obs_dict: dict) -> dict:
 
 class Metrics:
     def __init__(self):
-        self.step            = 0
-        self.reward_history  = []          # (step, mean_reward)
-        self.decision_counts = collections.Counter()
-        self.parse_failures  = 0
-        self.env_errors      = 0
-        self.format_scores   = []
-        self.reward_by_task  = collections.defaultdict(list)
-        self.total_calls     = 0
-        self._start_time     = time.time()
+        self.step               = 0
+        self.reward_history     = []   # (step, mean_reward) — overall
+        self.diff_reward_hist   = collections.defaultdict(list)  # diff → [(step, mean)]
+        self.format_history     = []   # (step, format_rate) — compliance over time
+        self.episode_len_hist   = []   # all episode lengths (for histogram)
+        self.ep_len_by_task     = collections.defaultdict(list)  # task_id → [lengths]
+        self.decision_history   = []   # [(step, Counter)] for stacked-bar over time
+        self.decision_counts    = collections.Counter()
+        self.parse_failures     = 0
+        self.env_errors         = 0
+        self.format_scores      = []
+        self.reward_by_task     = collections.defaultdict(list)
+        self.total_calls        = 0
+        self._start_time        = time.time()
+        self._step_decisions    = collections.Counter()  # decisions in current step batch
 
-    def log_step(self, rewards, decisions, format_ok_list, task_ids, errors):
+    def log_step(self, rewards, decisions, format_ok_list, task_ids, errors,
+                 episode_lengths=None):
         self.step += 1
         self.total_calls += len(rewards)
         mean_r = sum(rewards) / len(rewards) if rewards else 0.0
         self.reward_history.append((self.step, mean_r))
+
+        # Per-difficulty reward history
+        diff_rewards: dict = collections.defaultdict(list)
+        for tid, r in zip(task_ids, rewards):
+            d = _TASK_DIFFICULTY.get(tid, 'easy')
+            diff_rewards[d].append(r)
+        for d, rs in diff_rewards.items():
+            self.diff_reward_hist[d].append((self.step, sum(rs) / len(rs)))
+
         for d in decisions:
             self.decision_counts[d] += 1
+            self._step_decisions[d] += 1
+        # Snapshot decision distribution every step for stacked-bar
+        self.decision_history.append((self.step, dict(self._step_decisions)))
+
+        fmt_ok_count = sum(1 for ok in format_ok_list if ok)
+        fmt_rate = fmt_ok_count / len(format_ok_list) if format_ok_list else 0.0
+        self.format_history.append((self.step, fmt_rate))
         for ok in format_ok_list:
             self.format_scores.append(1.0 if ok else 0.0)
+
         for tid, r in zip(task_ids, rewards):
             self.reward_by_task[tid].append(r)
+
+        if episode_lengths:
+            for tid, ep_len in zip(task_ids, episode_lengths):
+                self.episode_len_hist.append(ep_len)
+                self.ep_len_by_task[tid].append(ep_len)
+
         self.env_errors += errors
         self._flush_live()
 
@@ -237,45 +280,255 @@ class Metrics:
             task_means = {t: round(sum(v)/len(v), 3) for t, v in self.reward_by_task.items()}
             print(f'[METRICS] per_task_reward: {task_means}')
 
-    def save_reward_curve(self, path='/app/reward_curve.png'):
-        if not self.reward_history:
-            return
-        steps   = [s for s, _ in self.reward_history]
-        rewards = [r for _, r in self.reward_history]
+    def save_all_metrics_figures(self, run_dir: str):
+        """
+        Save six standard RL research metric figures to run_dir.
+        All figures follow conventions used in academic RL papers:
+        - Named axes (xlabel, ylabel)
+        - Figure caption as fig.text below the plot
+        - Dark GitHub-style theme consistent with project
+        - Smoothed curves with raw data visible in background
+        """
+        PALETTE = {'easy': '#3fb950', 'medium': '#d29922', 'hard': '#f85149', 'long': '#a371f7'}
+        BG      = '#0d1117'
+        PANEL   = '#161b22'
+        GRID    = '#21262d'
+        TEXT    = '#e6edf3'
+        SUBTEXT = '#8b949e'
+        ACCENT  = '#58a6ff'
 
-        # Smooth with rolling window
-        window = max(1, len(rewards) // 10)
-        smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
+        def _setup(ax, xlabel='', ylabel='', title=''):
+            ax.set_facecolor(PANEL)
+            ax.tick_params(colors=TEXT, labelsize=8)
+            for sp in ax.spines.values():
+                sp.set_color('#30363d')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.yaxis.grid(True, color=GRID, linewidth=0.6, alpha=0.8)
+            ax.xaxis.grid(True, color=GRID, linewidth=0.4, alpha=0.4)
+            ax.set_axisbelow(True)
+            if xlabel: ax.set_xlabel(xlabel, color=SUBTEXT, fontsize=9)
+            if ylabel: ax.set_ylabel(ylabel, color=SUBTEXT, fontsize=9)
+            if title:  ax.set_title(title, color=TEXT, fontsize=10, fontweight='bold', pad=8)
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+        def _smooth(values, window=None):
+            if len(values) < 3:
+                return values
+            w = window or max(3, len(values) // 12)
+            return np.convolve(values, np.ones(w)/w, mode='valid'), w
 
-        # Raw + smoothed reward curve
-        axes[0].plot(steps, rewards, alpha=0.3, color='#3498db', label='Per-step reward')
-        axes[0].plot(steps[window-1:], smoothed, color='#2980b9', linewidth=2, label=f'Smoothed (w={window})')
-        axes[0].set_xlabel('Training Step')
-        axes[0].set_ylabel('Mean Batch Reward')
-        axes[0].set_title('Reward Curve During Training', fontweight='bold')
-        axes[0].set_ylim(0, 1.0)
-        axes[0].legend()
-        axes[0].axhline(0.5, color='gray', linestyle='--', alpha=0.4)
+        def _caption(fig, text):
+            fig.text(0.5, 0.01, text, ha='center', va='bottom',
+                     color=SUBTEXT, fontsize=7, style='italic')
 
-        # Decision distribution pie
-        if self.decision_counts:
-            labels = list(self.decision_counts.keys())
-            counts = list(self.decision_counts.values())
-            colors = ['#2ecc71','#e74c3c','#f39c12','#9b59b6','#3498db','#1abc9c']
-            axes[1].pie(counts, labels=labels, autopct='%1.0f%%',
-                        colors=colors[:len(labels)], startangle=90)
-            axes[1].set_title('Decision Distribution During Training', fontweight='bold')
+        ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
-        plt.suptitle(f'AP Commander GRPO — Training Diagnostics | {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}')
-        plt.tight_layout()
-        plt.savefig(path, dpi=120, bbox_inches='tight')
-        print(f'[METRICS] Saved reward curve: {path}')
-        plt.close()
+        # ── Figure 1: Mean Episode Return (reward curve) ──────────────────────
+        if self.reward_history:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            fig.patch.set_facecolor(BG)
+            steps   = [s for s, _ in self.reward_history]
+            rewards = [r for _, r in self.reward_history]
+            ax.plot(steps, rewards, color=ACCENT, alpha=0.25, linewidth=1, label='Per-batch mean')
+            if len(rewards) >= 5:
+                sm, w = _smooth(rewards)
+                ax.plot(steps[w-1:], sm, color=ACCENT, linewidth=2, label=f'EMA (w={w})')
+            ax.axhline(0.5, color=SUBTEXT, linestyle='--', linewidth=1, alpha=0.5, label='Chance baseline (0.5)')
+            recent_mean = sum(rewards[-20:]) / min(20, len(rewards))
+            ax.axhline(recent_mean, color='#f78166', linestyle=':', linewidth=1.5,
+                       label=f'Recent mean = {recent_mean:.3f}')
+            ax.set_ylim(0, 1.05)
+            ax.legend(fontsize=8, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+            _setup(ax, xlabel='Training Step (reward function call batch)',
+                   ylabel='Mean Episode Return  [0.01 – 0.99]',
+                   title='Training Reward Curve — AP Commander GRPO')
+            _caption(fig, f'Each step = one GRPO batch. Reward = discounted accumulated score from AP Commander environment. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 1, 1])
+            p = os.path.join(run_dir, 'fig1_reward_curve.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
+
+        # ── Figure 2: Per-Difficulty Learning Curves ──────────────────────────
+        if self.diff_reward_hist:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            fig.patch.set_facecolor(BG)
+            for diff in _DIFFICULTY_ORDER:
+                hist = self.diff_reward_hist.get(diff, [])
+                if not hist:
+                    continue
+                steps_d  = [s for s, _ in hist]
+                rewards_d = [r for _, r in hist]
+                color = PALETTE.get(diff, ACCENT)
+                ax.plot(steps_d, rewards_d, color=color, alpha=0.20, linewidth=1)
+                if len(rewards_d) >= 5:
+                    sm, w = _smooth(rewards_d)
+                    ax.plot(steps_d[w-1:], sm, color=color, linewidth=2.5, label=f'{diff} (n={len(steps_d)})')
+                else:
+                    ax.plot(steps_d, rewards_d, color=color, linewidth=2.5, label=diff)
+            for thr_diff, thr_val in _UNLOCK_THRESHOLDS.items():
+                ax.axhline(thr_val, color=PALETTE.get(thr_diff, SUBTEXT),
+                           linestyle='--', linewidth=0.8, alpha=0.5)
+            ax.set_ylim(0, 1.05)
+            ax.legend(fontsize=9, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+            _setup(ax, xlabel='Training Step',
+                   ylabel='Mean Reward per Difficulty Tier  [0.01 – 0.99]',
+                   title='Curriculum Learning Curves — Easy / Medium / Hard / Long-Horizon')
+            _caption(fig, f'Dashed lines = curriculum unlock thresholds. Each line = rolling mean of all tasks in that difficulty tier. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 1, 1])
+            p = os.path.join(run_dir, 'fig2_difficulty_curves.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
+
+        # ── Figure 3: Episode Length Distribution ─────────────────────────────
+        if self.episode_len_hist:
+            fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+            fig.patch.set_facecolor(BG)
+            # Overall histogram
+            max_len = max(self.episode_len_hist)
+            bins = range(1, max_len + 2)
+            axes[0].hist(self.episode_len_hist, bins=bins, color=ACCENT, alpha=0.85,
+                         edgecolor=BG, rwidth=0.8)
+            _setup(axes[0], xlabel='Episode Length (number of env steps)',
+                   ylabel='Count of Episodes',
+                   title='Episode Length Distribution (all tasks)')
+            axes[0].axvline(np.mean(self.episode_len_hist), color='#f78166',
+                            linestyle='--', linewidth=1.5,
+                            label=f'Mean = {np.mean(self.episode_len_hist):.1f}')
+            axes[0].legend(fontsize=8, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+            # Per-difficulty mean episode length bar
+            diff_ep_means = {}
+            for diff in _DIFFICULTY_ORDER:
+                lens = []
+                for tid, d in _TASK_DIFFICULTY.items():
+                    if d == diff:
+                        lens.extend(self.ep_len_by_task.get(tid, []))
+                if lens:
+                    diff_ep_means[diff] = np.mean(lens)
+            if diff_ep_means:
+                diffs  = list(diff_ep_means.keys())
+                means  = list(diff_ep_means.values())
+                colors = [PALETTE.get(d, ACCENT) for d in diffs]
+                axes[1].bar(diffs, means, color=colors, alpha=0.85, edgecolor=BG, width=0.5)
+                for i, (d, m) in enumerate(zip(diffs, means)):
+                    axes[1].text(i, m + 0.05, f'{m:.1f}', ha='center', color=TEXT, fontsize=9,
+                                 fontweight='bold')
+                axes[1].set_ylim(0, max(means) * 1.3)
+                _setup(axes[1], xlabel='Difficulty Tier',
+                       ylabel='Mean Episode Length (steps)',
+                       title='Mean Episode Length by Difficulty')
+            fig.suptitle('Episode Length Analysis — Multi-Step Decision Behavior', color=TEXT, fontsize=11, y=1.01)
+            _caption(fig, f'Long-horizon tasks expected to have higher mean episode lengths as agent learns to use ESCALATE/QUERY_VENDOR. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 1, 1])
+            p = os.path.join(run_dir, 'fig3_episode_lengths.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
+
+        # ── Figure 4: Format Compliance Rate Over Time ────────────────────────
+        if self.format_history:
+            fig, ax = plt.subplots(figsize=(10, 3.5))
+            fig.patch.set_facecolor(BG)
+            steps_f  = [s for s, _ in self.format_history]
+            fmt_vals = [r for _, r in self.format_history]
+            ax.plot(steps_f, fmt_vals, color='#d29922', alpha=0.25, linewidth=1)
+            if len(fmt_vals) >= 5:
+                sm, w = _smooth(fmt_vals)
+                ax.plot(steps_f[w-1:], sm, color='#d29922', linewidth=2.5,
+                        label=f'EMA (w={w})')
+            final_rate = sum(self.format_scores) / max(1, len(self.format_scores))
+            ax.axhline(final_rate, color='#3fb950', linestyle='--', linewidth=1.5,
+                       label=f'Overall rate = {final_rate:.1%}')
+            ax.set_ylim(0, 1.05)
+            ax.legend(fontsize=8, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+            _setup(ax, xlabel='Training Step',
+                   ylabel='Format Compliance Rate  [0 – 1]',
+                   title='JSON Format Compliance Over Training')
+            _caption(fig, f'Format compliance = fraction of completions producing valid JSON with correct fields. Parse failures = {self.parse_failures}. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 1, 1])
+            p = os.path.join(run_dir, 'fig4_format_compliance.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
+
+        # ── Figure 5: Decision Distribution Over Time (stacked bar) ──────────
+        if self.decision_history and len(self.decision_history) >= 3:
+            all_decisions = sorted(set(self.decision_counts.keys()))
+            # Sample ~20 evenly-spaced checkpoints for readability
+            n_checkpoints = min(20, len(self.decision_history))
+            idxs = [int(i * (len(self.decision_history) - 1) / (n_checkpoints - 1))
+                    for i in range(n_checkpoints)]
+            ckpt_steps  = [self.decision_history[i][0] for i in idxs]
+            ckpt_counts = [self.decision_history[i][1] for i in idxs]
+            # Convert to fractions
+            fracs = []
+            for c in ckpt_counts:
+                total_c = sum(c.values()) or 1
+                fracs.append({d: c.get(d, 0) / total_c for d in all_decisions})
+            fig, ax = plt.subplots(figsize=(12, 4))
+            fig.patch.set_facecolor(BG)
+            dec_colors = ['#3fb950','#f85149','#d29922','#a371f7','#58a6ff','#f0883e']
+            bottom = np.zeros(len(ckpt_steps))
+            for j, dec in enumerate(all_decisions):
+                vals = np.array([f[dec] for f in fracs])
+                ax.bar(range(len(ckpt_steps)), vals, bottom=bottom,
+                       label=dec, color=dec_colors[j % len(dec_colors)],
+                       alpha=0.85, edgecolor=BG)
+                bottom += vals
+            ax.set_xticks(range(len(ckpt_steps)))
+            ax.set_xticklabels([str(s) for s in ckpt_steps], rotation=45, fontsize=7)
+            ax.set_ylim(0, 1.05)
+            ax.legend(fontsize=7, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT,
+                      loc='upper right', bbox_to_anchor=(1.15, 1))
+            _setup(ax, xlabel='Training Step (checkpoint)',
+                   ylabel='Fraction of Decisions',
+                   title='Decision Distribution Over Training (Stacked Bar)')
+            _caption(fig, f'Each bar = cumulative decision distribution up to that checkpoint. Ideal: APPROVE_FULL grows for easy tasks, REJECT for fraud/duplicate tasks. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 0.88, 1])
+            p = os.path.join(run_dir, 'fig5_decision_distribution.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
+
+        # ── Figure 6: Per-Task Training Mean (horizontal bar) ─────────────────
+        if self.reward_by_task:
+            task_means = {t: sum(v)/len(v) for t, v in self.reward_by_task.items()}
+            tasks  = sorted(task_means, key=lambda t: (_DIFFICULTY_ORDER.index(_TASK_DIFFICULTY.get(t,'easy')), t))
+            means  = [task_means[t] for t in tasks]
+            colors = [PALETTE.get(_TASK_DIFFICULTY.get(t,'easy'), ACCENT) for t in tasks]
+            short  = [t.replace('easy_','').replace('medium_','').replace('hard_','').replace('long_','').replace('_',' ').title() for t in tasks]
+
+            fig, ax = plt.subplots(figsize=(10, max(4, len(tasks) * 0.45)))
+            fig.patch.set_facecolor(BG)
+            yp = range(len(tasks))
+            ax.barh(list(yp), means, color=colors, alpha=0.85, edgecolor=BG)
+            ax.set_yticks(list(yp))
+            ax.set_yticklabels(short, fontsize=8)
+            ax.set_xlim(0, 1.05)
+            overall_mean = sum(means) / len(means)
+            ax.axvline(overall_mean, color='#f78166', linestyle='--', linewidth=1.5,
+                       label=f'Overall mean = {overall_mean:.3f}')
+            ax.axvline(0.5, color=SUBTEXT, linestyle=':', linewidth=1, alpha=0.5)
+            for i, m in enumerate(means):
+                ax.text(m + 0.01, i, f'{m:.3f}', va='center', color=TEXT, fontsize=7)
+            from matplotlib.patches import Patch
+            legend_els = [Patch(facecolor=PALETTE[d], label=d.title()) for d in _DIFFICULTY_ORDER if d in PALETTE]
+            legend_els.append(plt.Line2D([0],[0], color='#f78166', linestyle='--', label=f'Mean {overall_mean:.3f}'))
+            ax.legend(handles=legend_els, fontsize=8, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+            _setup(ax, xlabel='Mean Training Reward  [0.01 – 0.99]',
+                   ylabel='Task',
+                   title='Per-Task Training Mean Reward (all episodes)')
+            _caption(fig, f'Tasks ordered by difficulty. Green ≥ 0.7 = curriculum mastered. Orange = in progress. Red < 0.4 = needs more training. | {ts}')
+            plt.tight_layout(rect=[0, 0.04, 1, 1])
+            p = os.path.join(run_dir, 'fig6_per_task_means.png')
+            plt.savefig(p, dpi=130, bbox_inches='tight', facecolor=BG)
+            plt.close()
+            print(f'[METRICS] {p}')
 
 
 METRICS = Metrics()
+_EPISODE_LOG_PATH: str = ''   # set to run_dir/episodes.jsonl once run_dir is known
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -347,35 +600,55 @@ def run_episode(task_id: str, action_json: dict, seed=None) -> float:
 
 
 def run_episode_accumulated(task_id: str, first_action: dict, seed=None,
-                             discount: float = 0.9, max_steps: int = 5) -> float:
+                             discount: float = 0.9, max_steps: int = 20,
+                             episode_log: list | None = None) -> tuple[float, int]:
     """
     Run a full multi-step episode accumulating discounted per-step rewards.
+    Returns (score, episode_length) so callers can track step counts.
     Model's first action starts the episode; _greedy_followup() handles
     subsequent steps so multi-step sequences earn full accumulated credit.
     E.g. QUERY_VENDOR→REJECT = 0.01 + 0.9*0.99 = 0.901 > shortcut REJECT = ~0.4
+
+    episode_log: if provided, appended with one dict per env step for JSONL logging.
     """
     try:
         r = requests.post(f'{ENV_URL}/reset',
                           json={'task_id': task_id, 'seed': seed}, timeout=20)
         r.raise_for_status()
-        session_id = r.json()['session_id']
+        reset_data = r.json()
+        session_id = reset_data['session_id']
         action = first_action
         total  = 0.0
+        steps_taken = 0
         for step_n in range(max_steps):
             step_r = requests.post(f'{ENV_URL}/step',
                                    json={'session_id': session_id, 'action': action},
                                    timeout=20)
             step_r.raise_for_status()
-            result  = step_r.json()
-            r_score = float(result['reward']['score'])
-            done    = result['done']
-            total  += (discount ** step_n) * r_score
+            result    = step_r.json()
+            r_score   = float(result['reward']['score'])
+            done      = result['done']
+            obs_back  = result.get('observation', {})
+            total    += (discount ** step_n) * r_score
+            steps_taken = step_n + 1
+            if episode_log is not None:
+                episode_log.append({
+                    'step_n':          step_n,
+                    'decision':        action.get('decision'),
+                    'approved_amount': action.get('approved_amount'),
+                    'reason_code':     action.get('reason_code'),
+                    'explanation':     (action.get('explanation') or '')[:120],
+                    'step_score':      round(r_score, 4),
+                    'done':            done,
+                    'context_notes':   obs_back.get('context_notes', []),
+                    'action_history':  obs_back.get('action_history', []),
+                })
             if done:
                 break
-            action = _greedy_followup(result['observation'])
-        return min(0.99, max(0.01, total))
-    except Exception:
-        return 0.01
+            action = _greedy_followup(obs_back)
+        return min(0.99, max(0.01, total)), steps_taken
+    except Exception as e:
+        return 0.01, 1
 
 
 # ── Two independent reward functions (guide: use multiple, not one) ─────────────
@@ -384,37 +657,69 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
     """
     Environment reward: accumulated discounted per-step reward from AP Commander.
     Curriculum gating redirects locked tasks to easier ones during early training.
+    Writes one JSONL record per episode to _EPISODE_LOG_PATH for full verifiability.
     """
     task_ids = task_id if task_id is not None else ['easy_perfect_match'] * len(completions)
     seeds    = seed    if seed    is not None else [random.randint(1, 999)] * len(completions)
 
-    rewards, decisions, format_ok_list, errors = [], [], [], 0
+    rewards, decisions, format_ok_list, ep_lengths, errors = [], [], [], [], 0
     for completion, tid, s in zip(completions, task_ids, seeds):
-        # Curriculum gate: redirect locked task to easiest unlocked
         gated_tid = CURRICULUM.gate_task(tid)
         if gated_tid != tid:
             print(f'[CURRICULUM] gate {tid} → {gated_tid}')
 
         action, fmt_ok = parse_action(completion)
+        episode_steps = []
         try:
-            score = run_episode_accumulated(gated_tid, action, seed=int(s))
-        except Exception:
-            score = 0.01
+            score, ep_len = run_episode_accumulated(
+                gated_tid, action, seed=int(s), episode_log=episode_steps)
+        except Exception as e:
+            score, ep_len = 0.01, 1
             errors += 1
+
         rewards.append(score)
+        ep_lengths.append(ep_len)
         decisions.append(action.get('decision', 'UNKNOWN'))
         format_ok_list.append(fmt_ok)
         CURRICULUM.record(gated_tid, score)
 
+        # Write structured episode record to JSONL for full verifiability
+        if _EPISODE_LOG_PATH:
+            try:
+                record = {
+                    'reward_step':   METRICS.step + 1,
+                    'call_n':        METRICS.total_calls + len(rewards),
+                    'task_id':       tid,
+                    'gated_task_id': gated_tid,
+                    'seed':          int(s),
+                    'format_ok':     fmt_ok,
+                    'score':         round(score, 4),
+                    'episode_len':   ep_len,
+                    'final_decision': action.get('decision'),
+                    'steps':         episode_steps,
+                    'ts':            datetime.datetime.now().isoformat(),
+                }
+                with open(_EPISODE_LOG_PATH, 'a') as _f:
+                    _f.write(json.dumps(record) + '\n')
+            except Exception:
+                pass
+
         if METRICS.total_calls % LOG_SAMPLES_EVERY == 0:
             gated_note = f'→{gated_tid}' if gated_tid != tid else ''
-            print(f'\n[SAMPLE] task={tid}{gated_note} seed={s} fmt={fmt_ok} score={score:.3f}')
+            print(f'\n[SAMPLE] task={tid}{gated_note} seed={s} fmt={fmt_ok} '
+                  f'score={score:.3f} ep_len={ep_len}')
             print(f'  {action.get("decision")} ${action.get("approved_amount")} '
                   f'{action.get("reason_code")}')
             print(f'  {str(action.get("explanation",""))[:100]}')
             print(f'  curriculum: {CURRICULUM.status_line()}')
+            if episode_steps:
+                actor_notes = [n for step in episode_steps
+                               for n in step.get('context_notes', [])]
+                if actor_notes:
+                    print(f'  actor_responses: {actor_notes[:2]}')
 
-    METRICS.log_step(rewards, decisions, format_ok_list, list(task_ids), errors)
+    METRICS.log_step(rewards, decisions, format_ok_list, list(task_ids), errors,
+                     episode_lengths=ep_lengths)
     if METRICS.step % 5 == 0:
         METRICS.print_summary()
         print(f'[CURRICULUM] {CURRICULUM.status_line()}')
@@ -481,6 +786,11 @@ def main():
     RUN_DIR = _make_run_dir()
     print(f'[RUN] Artifacts → {RUN_DIR}')
 
+    # Point the global episode log path so env_reward_fn can write structured logs
+    global _EPISODE_LOG_PATH
+    _EPISODE_LOG_PATH = os.path.join(RUN_DIR, 'episodes.jsonl')
+    print(f'[RUN] Episode log → {_EPISODE_LOG_PATH}')
+
     print(f'[ENV] Checking {ENV_URL}...')
     h = requests.get(f'{ENV_URL}/health', timeout=30).json()
     print(f"[ENV] status={h['status']} tasks={h.get('total_tasks')}")
@@ -530,11 +840,11 @@ def main():
     print(f'  Mean: {sum(baseline.values())/len(baseline):.3f}')
     model.train()
 
-    # Dataset contains ALL 10 tasks × 5 seeds = 50 prompts (same as Run 1).
-    # gate_task() in env_reward_fn handles curriculum redirection at score time:
-    # locked tasks get redirected to easy → model still trains, just on easier logic.
-    # As curriculum unlocks, redirection stops and model gets real hard task rewards.
-    print('\n[DATASET] Building prompts (all 10 tasks × 5 seeds = 50)...')
+    # Dataset contains ALL 17 tasks × 5 seeds = 85 prompts.
+    # gate_task() in env_reward_fn handles curriculum redirection at reward time:
+    # locked tasks (medium/hard/long) redirect to easy during early training.
+    # As curriculum unlocks thresholds, redirection stops and full task variety flows.
+    print(f'\n[DATASET] Building prompts ({len(TRAIN_TASKS)} tasks × 5 seeds = {len(TRAIN_TASKS)*5})...')
     task_seed_pairs = [(tid, s) for tid in TRAIN_TASKS for s in range(1, 6)]
     rows = []
     for task_id, seed in task_seed_pairs:
@@ -552,7 +862,9 @@ def main():
             print(f'  skip {task_id} seed={seed}: {e}')
 
     dataset = Dataset.from_list(rows)
-    print(f'[DATASET] {len(dataset)} samples across {len(TRAIN_TASKS)} tasks | curriculum: {CURRICULUM.status_line()}')
+    print(f'[DATASET] {len(dataset)} samples across {len(TRAIN_TASKS)} tasks '
+          f'({sum(1 for r in rows if _TASK_DIFFICULTY.get(r["task_id"],"easy")=="long")} long-horizon) '
+          f'| curriculum: {CURRICULUM.status_line()}')
 
     # Train
     print(f'\n[TRAIN] {NUM_EPOCHS} epochs | {NUM_GENERATIONS} generations/prompt | {len(dataset)} samples')
@@ -584,7 +896,7 @@ def main():
     print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
 
     METRICS.print_summary()
-    METRICS.save_reward_curve(os.path.join(RUN_DIR, 'reward_curve.png'))
+    METRICS.save_all_metrics_figures(RUN_DIR)
 
     # Save LoRA adapters (guide point 16: save adapters directly, do NOT merge 4-bit naively)
     adapter_dir = os.path.join(RUN_DIR, 'adapter')
@@ -622,97 +934,88 @@ def main():
         sym = '+' if d >= 0 else ''
         print(f'  {t:<35} {baseline[t]:.3f} -> {post[t]:.3f}  ({sym}{d:.3f})')
 
-    # ── 4-panel results figure ────────────────────────────────────────────────
-    fig = plt.figure(figsize=(16, 10))
-    fig.patch.set_facecolor('#0d1117')
-    gs  = fig.add_gridspec(2, 2, hspace=0.40, wspace=0.30)
-
-    def _dark(ax, title=''):
-        ax.set_facecolor('#161b22')
-        ax.tick_params(colors='#c9d1d9', labelsize=8)
-        for sp in ax.spines.values(): sp.set_color('#30363d')
-        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
-        ax.yaxis.grid(True, color='#21262d', linewidth=0.7)
-        ax.set_axisbelow(True)
-        if title: ax.set_title(title, color='#e6edf3', fontsize=10, fontweight='bold', pad=8)
-
-    # Panel 1: Before / After eval bars
-    ax1   = fig.add_subplot(gs[0, 0])
-    tasks = list(EVAL_TASKS)
-    short = [t.replace('easy_','').replace('medium_','').replace('hard_','')
-              .replace('_',' ').title() for t in tasks]
-    xp    = np.arange(len(tasks))
-    ax1.bar(xp - 0.2, [baseline[t] for t in tasks], 0.35,
-            label='Before GRPO', color='#f85149', alpha=0.85)
-    ax1.bar(xp + 0.2, [post[t]     for t in tasks], 0.35,
-            label='After GRPO',  color='#3fb950', alpha=0.85)
-    ax1.set_xticks(xp); ax1.set_xticklabels(short, rotation=35, ha='right', fontsize=7)
-    ax1.set_ylim(0, 1.05); ax1.axhline(0.5, color='#484f58', linestyle='--', alpha=0.6)
-    ax1.legend(fontsize=8, facecolor='#161b22', edgecolor='#30363d', labelcolor='#c9d1d9')
-    _dark(ax1, f'Before vs After — {NUM_EPOCHS} Epochs GRPO')
-
-    # Panel 2: Per-task training mean (from live metrics)
-    ax2 = fig.add_subplot(gs[0, 1])
-    task_means = {t: round(sum(v)/len(v), 3) for t, v in METRICS.reward_by_task.items()}
-    if task_means:
-        tm_tasks  = list(task_means.keys())
-        tm_scores = list(task_means.values())
-        tm_short  = [t.replace('easy_','').replace('medium_','').replace('hard_','')
-                      .replace('_',' ').title() for t in tm_tasks]
-        colors    = ['#3fb950' if s >= 0.7 else '#d29922' if s >= 0.4 else '#f85149'
-                     for s in tm_scores]
-        yp = range(len(tm_tasks))
-        ax2.barh(yp, tm_scores, color=colors, alpha=0.85, edgecolor='#0d1117')
-        ax2.set_yticks(list(yp)); ax2.set_yticklabels(tm_short, fontsize=7)
-        ax2.set_xlim(0, 1.05)
-        ax2.axvline(0.7, color='#3fb950', linestyle='--', linewidth=1, alpha=0.5)
-        for i, s in enumerate(tm_scores):
-            ax2.text(s + 0.01, i, f'{s:.2f}', va='center', color='#c9d1d9', fontsize=7)
-    _dark(ax2, 'Per-Task Training Mean (all seeds)')
-
-    # Panel 3: Decision distribution
-    ax3 = fig.add_subplot(gs[1, 0])
-    dc  = dict(METRICS.decision_counts)
-    if dc:
-        colors3 = ['#3fb950','#f85149','#d29922','#a371f7','#58a6ff','#39d353']
-        wedges, _, autos = ax3.pie(list(dc.values()), labels=None,
-                                   autopct='%1.0f%%', colors=colors3[:len(dc)],
-                                   startangle=90, pctdistance=0.75,
-                                   wedgeprops=dict(edgecolor='#0d1117', linewidth=1.5))
-        for at in autos: at.set_color('#0d1117'); at.set_fontsize(8); at.set_fontweight('bold')
-        ax3.legend(list(dc.keys()), loc='lower center', bbox_to_anchor=(0.5, -0.15),
-                   ncol=3, fontsize=7, facecolor='#161b22', edgecolor='#30363d', labelcolor='#c9d1d9')
-    ax3.set_facecolor('#161b22'); fig.patch.set_facecolor('#0d1117')
-    ax3.set_title('Decision Distribution During Training', color='#e6edf3',
-                  fontsize=10, fontweight='bold', pad=8)
-
-    # Panel 4: Reward curve
-    ax4 = fig.add_subplot(gs[1, 1])
-    if METRICS.reward_history:
-        steps   = [s for s, _ in METRICS.reward_history]
-        rewards = [r for _, r in METRICS.reward_history]
-        ax4.plot(steps, rewards, color='#58a6ff', alpha=0.30, linewidth=1)
-        if len(rewards) >= 5:
-            w  = max(3, len(rewards) // 15)
-            sm = np.convolve(rewards, np.ones(w)/w, mode='valid')
-            ax4.plot(steps[w-1:], sm, color='#79c0ff', linewidth=2, label=f'Smooth (w={w})')
-        mean_r = sum(rewards[-20:]) / min(20, len(rewards))
-        ax4.axhline(mean_r, color='#f78166', linestyle='--', linewidth=1,
-                    label=f'Recent mean: {mean_r:.3f}')
-        ax4.set_ylim(0, 1.05)
-        ax4.legend(fontsize=7, facecolor='#161b22', edgecolor='#30363d', labelcolor='#c9d1d9')
-        ax4.set_xlabel('Training Step', color='#c9d1d9', fontsize=8)
-    _dark(ax4, 'Reward Curve')
-
+    # ── Before/After comparison figure (results.png — key result for demo) ────
+    BG, TEXT, SUBTEXT = '#0d1117', '#e6edf3', '#8b949e'
+    PANEL, GRID = '#161b22', '#21262d'
     _fmt_rate = sum(METRICS.format_scores) / max(1, len(METRICS.format_scores))
-    fig.suptitle(
-        f'AP Commander GRPO — {MODEL_NAME} | {NUM_EPOCHS} epochs | '
-        f'{NUM_GENERATIONS} gen | format={_fmt_rate:.1%} | '
-        f'parse_fails={METRICS.parse_failures} | {datetime.datetime.now().strftime("%Y-%m-%d")}',
-        color='#e6edf3', fontsize=9, y=0.98
+
+    eval_tasks_sorted = sorted(
+        EVAL_TASKS,
+        key=lambda t: (_DIFFICULTY_ORDER.index(_TASK_DIFFICULTY.get(t,'easy')), t)
     )
+    DIFF_COLORS = {'easy': '#3fb950', 'medium': '#d29922', 'hard': '#f85149', 'long': '#a371f7'}
+
+    fig = plt.figure(figsize=(18, max(8, len(eval_tasks_sorted) * 0.45 + 2)))
+    fig.patch.set_facecolor(BG)
+    gs  = fig.add_gridspec(1, 2, wspace=0.38)
+
+    # Panel left: before/after horizontal bars
+    ax_l = fig.add_subplot(gs[0, 0])
+    ax_l.set_facecolor(PANEL)
+    yp   = np.arange(len(eval_tasks_sorted))
+    short = [t.replace('easy_','').replace('medium_','').replace('hard_','').replace('long_','')
+              .replace('_',' ').title() for t in eval_tasks_sorted]
+    bar_h = 0.35
+    bars_b = ax_l.barh(yp - bar_h/2, [baseline.get(t, 0) for t in eval_tasks_sorted],
+                       bar_h, label='Before GRPO', color='#f85149', alpha=0.85, edgecolor=BG)
+    bars_a = ax_l.barh(yp + bar_h/2, [post.get(t, 0)     for t in eval_tasks_sorted],
+                       bar_h, label='After GRPO',  color='#3fb950', alpha=0.85, edgecolor=BG)
+    ax_l.set_yticks(yp)
+    ax_l.set_yticklabels(short, fontsize=8, color=TEXT)
+    ax_l.set_xlim(0, 1.15)
+    ax_l.axvline(0.5, color=SUBTEXT, linestyle='--', linewidth=1, alpha=0.5)
+    # Color-code y-tick labels by difficulty
+    for i, t in enumerate(eval_tasks_sorted):
+        ax_l.get_yticklabels()[i].set_color(DIFF_COLORS.get(_TASK_DIFFICULTY.get(t,'easy'), TEXT))
+    ax_l.legend(fontsize=9, facecolor=PANEL, edgecolor='#30363d', labelcolor=TEXT)
+    ax_l.set_xlabel('Task Score  [0.01 – 0.99]', color=SUBTEXT, fontsize=9)
+    ax_l.set_ylabel('Task (color = difficulty tier)', color=SUBTEXT, fontsize=9)
+    ax_l.set_title(f'Before vs After GRPO — {NUM_EPOCHS} Epochs', color=TEXT, fontsize=11,
+                   fontweight='bold', pad=10)
+    ax_l.tick_params(colors=TEXT, labelsize=8)
+    for sp in ax_l.spines.values(): sp.set_color('#30363d')
+    ax_l.spines['top'].set_visible(False); ax_l.spines['right'].set_visible(False)
+    ax_l.xaxis.grid(True, color=GRID, linewidth=0.6, alpha=0.7)
+    ax_l.set_axisbelow(True)
+
+    # Panel right: delta (improvement) per task
+    ax_r = fig.add_subplot(gs[0, 1])
+    ax_r.set_facecolor(PANEL)
+    deltas = [post.get(t, 0) - baseline.get(t, 0) for t in eval_tasks_sorted]
+    d_colors = ['#3fb950' if d >= 0 else '#f85149' for d in deltas]
+    ax_r.barh(yp, deltas, color=d_colors, alpha=0.85, edgecolor=BG)
+    ax_r.set_yticks(yp)
+    ax_r.set_yticklabels(short, fontsize=8, color=TEXT)
+    ax_r.axvline(0, color=SUBTEXT, linewidth=1)
+    for i, d in enumerate(deltas):
+        ax_r.text(d + 0.005 * np.sign(d + 1e-9), i, f'{d:+.3f}',
+                  va='center', color=TEXT, fontsize=7)
+    ax_r.set_xlabel('Score Delta (After − Before)', color=SUBTEXT, fontsize=9)
+    ax_r.set_ylabel('Task', color=SUBTEXT, fontsize=9)
+    ax_r.set_title('GRPO Improvement per Task', color=TEXT, fontsize=11,
+                   fontweight='bold', pad=10)
+    ax_r.tick_params(colors=TEXT, labelsize=8)
+    for sp in ax_r.spines.values(): sp.set_color('#30363d')
+    ax_r.spines['top'].set_visible(False); ax_r.spines['right'].set_visible(False)
+    ax_r.xaxis.grid(True, color=GRID, linewidth=0.6, alpha=0.7)
+    ax_r.set_axisbelow(True)
+
+    mean_before = sum(baseline.get(t,0) for t in eval_tasks_sorted) / len(eval_tasks_sorted)
+    mean_after  = sum(post.get(t,0)     for t in eval_tasks_sorted) / len(eval_tasks_sorted)
+    fig.suptitle(
+        f'AP Commander GRPO — {MODEL_NAME.split("/")[-1]}  |  {NUM_EPOCHS} epochs  |  '
+        f'{NUM_GENERATIONS} generations  |  {len(TRAIN_TASKS)} tasks\n'
+        f'Overall: {mean_before:.3f} → {mean_after:.3f}  (+{mean_after-mean_before:.3f})  '
+        f'|  format={_fmt_rate:.1%}  |  parse_fails={METRICS.parse_failures}  '
+        f'|  {datetime.datetime.now().strftime("%Y-%m-%d")}',
+        color=TEXT, fontsize=10, y=1.01
+    )
+    fig.text(0.5, -0.01,
+             'Task colors: green=easy, yellow=medium, red=hard, purple=long-horizon. '
+             'Score range [0.01, 0.99] as per AP Commander environment specification.',
+             ha='center', color=SUBTEXT, fontsize=8, style='italic')
     results_png = os.path.join(RUN_DIR, 'results.png')
-    plt.savefig(results_png, dpi=130, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.savefig(results_png, dpi=130, bbox_inches='tight', facecolor=BG)
     plt.close()
     print(f'[DONE] Saved {results_png}')
 
@@ -730,15 +1033,34 @@ def main():
         'hardware':        'A10G (HF Spaces)',
         'baseline':        baseline,
         'post_training':   post,
-        'delta':           {t: round(post[t] - baseline[t], 4) for t in EVAL_TASKS},
+        'delta':           {t: round(post.get(t,0) - baseline.get(t,0), 4) for t in EVAL_TASKS},
+        'overall_baseline': round(mean_before, 4),
+        'overall_post':     round(mean_after, 4),
+        'overall_delta':    round(mean_after - mean_before, 4),
+        'episode_log':      _EPISODE_LOG_PATH,
         'metrics': {
-            'total_reward_calls': METRICS.total_calls,
-            'parse_failures':     METRICS.parse_failures,
-            'env_errors':         METRICS.env_errors,
-            'format_rate':        round(fmt_rate, 4),
-            'decision_counts':    dict(METRICS.decision_counts),
-            'per_task_mean':      {t: round(sum(v)/len(v), 4) for t, v in METRICS.reward_by_task.items()},
+            'total_reward_calls':   METRICS.total_calls,
+            'parse_failures':       METRICS.parse_failures,
+            'env_errors':           METRICS.env_errors,
+            'format_rate':          round(fmt_rate, 4),
+            'decision_counts':      dict(METRICS.decision_counts),
+            'per_task_mean':        {t: round(sum(v)/len(v), 4) for t, v in METRICS.reward_by_task.items()},
+            'mean_episode_length':  round(sum(METRICS.episode_len_hist) / max(1, len(METRICS.episode_len_hist)), 2),
+            'by_difficulty_post':   {d: round(sum(post.get(t,0) for t,diff in _TASK_DIFFICULTY.items()
+                                                  if diff==d and t in post) /
+                                              max(1, sum(1 for t,diff in _TASK_DIFFICULTY.items()
+                                                         if diff==d and t in post)), 4)
+                                     for d in _DIFFICULTY_ORDER},
         },
+        'figures': [
+            'fig1_reward_curve.png',
+            'fig2_difficulty_curves.png',
+            'fig3_episode_lengths.png',
+            'fig4_format_compliance.png',
+            'fig5_decision_distribution.png',
+            'fig6_per_task_means.png',
+            'results.png',
+        ],
     }
     results_json = os.path.join(RUN_DIR, 'training_results.json')
     with open(results_json, 'w') as f:
