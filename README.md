@@ -98,17 +98,18 @@ APObservation
 
 ![Baseline Reward Curves](baseline_plot.png)
 
-| Task Category | Optimal Baseline | Untrained Llama | After GRPO (3 epochs) | Δ (trained vs untrained) |
+| Task Category | Optimal Ceiling | Untrained Llama-3-8B | After GRPO (3 epochs) | Δ |
 |---|---|---|---|---|
-| Easy (2 tasks) | **0.990** | — | — | — |
-| Medium (4 tasks) | **0.907** | — | — | — |
-| Hard (7 tasks) | **0.749** | — | — | — |
-| Long-horizon (7 tasks) | **0.989** | — | — | — |
-| **Overall (20 tasks)** | **0.889** | — | — | — |
+| Easy (2 tasks) | **0.990** | **0.990** | — | — |
+| Medium (4 tasks) | **0.907** | **0.712** | — | — |
+| Hard (7 tasks) | **0.843** | **0.698** | — | — |
+| Long-horizon (7 tasks) | **0.989** | **0.832** | — | — |
+| **Overall (20 tasks)** | **0.921** | **0.811** | — | — |
 
-> Optimal baseline = scripted agent with perfect domain knowledge (the ceiling).  
-> Untrained Llama and post-GRPO scores will be filled in once training completes.  
-> Full per-task breakdown with step-level rewards: [`baseline_results.json`](baseline_results.json)
+> **Optimal ceiling** = scripted agent with perfect domain knowledge (the upper bound).  
+> **Untrained Llama-3-8B** = `meta-llama/Meta-Llama-3-8B-Instruct` via HF router, no fine-tuning.  
+> Post-GRPO scores will be filled in once training completes.  
+> Per-task breakdown: [`baseline_results.json`](baseline_results.json) | LLM results: [`results.json`](results.json)
 
 ---
 

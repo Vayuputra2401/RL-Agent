@@ -186,9 +186,10 @@ def run_task(task_id):
     elif task_id == 'hard_credit_memo':
         po_ref    = inv.get('po_reference', '')
         po_exists = any(p.get('po_number') == po_ref and p.get('status') == 'OPEN' for p in pos)
+        credit_amt = abs(total)  # credit memos have negative invoice_total — approved_amount must be >= 0
         if po_exists:
-            do_step('APPROVE_PARTIAL', total, 'MATCH_CONFIRMED',
-                    f"Credit memo {inv['invoice_id']} has valid OPEN PO. Credit ${total:,.2f} approved per Rule 9.")
+            do_step('APPROVE_PARTIAL', credit_amt, 'MATCH_CONFIRMED',
+                    f"Credit memo {inv['invoice_id']} has valid OPEN PO. Credit ${credit_amt:,.2f} approved per Rule 9.")
         else:
             do_step('REJECT', 0.0, 'NO_PO_FOUND',
                     f"Credit memo {inv['invoice_id']} — no valid OPEN PO. Rejecting.")

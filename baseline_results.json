@@ -2,7 +2,7 @@
   "run_type": "optimal_scripted_agent",
   "env_url": "https://pathikreet-ap-clerk-env.hf.space",
   "seed": 42,
-  "timestamp": "2026-04-25T13:47:28.317311",
+  "timestamp": "2026-04-25T14:23:29.064848",
   "summary": {
     "easy": {
       "mean": 0.99,
@@ -23,7 +23,7 @@
       "n": 4
     },
     "hard": {
-      "mean": 0.749,
+      "mean": 0.8429,
       "scores": [
         0.99,
         0.99,
@@ -31,7 +31,7 @@
         0.99,
         0.99,
         0.29,
-        0.01
+        0.667
       ],
       "n": 7
     },
@@ -49,7 +49,7 @@
       "n": 7
     }
   },
-  "overall_mean": 0.8886,
+  "overall_mean": 0.9215,
   "tasks": {
     "easy_perfect_match": {
       "difficulty": "easy",
@@ -321,10 +321,23 @@
     },
     "hard_credit_memo": {
       "difficulty": "hard",
-      "steps": [],
-      "final_score": 0.01,
-      "num_steps": 0,
-      "error": "422 Client Error: Unprocessable Entity for url: https://pathikreet-ap-clerk-env.hf.space/step"
+      "steps": [
+        {
+          "step": 1,
+          "action": "APPROVE_PARTIAL",
+          "score": 0.667,
+          "breakdown": {
+            "decision": 1.0,
+            "amount": 0.05,
+            "reason": 1.0,
+            "credit_memo_cited": 1.0
+          },
+          "feedback": "Approved credit amount should equal the credit memo total: $-1,754.10.",
+          "done": true
+        }
+      ],
+      "final_score": 0.667,
+      "num_steps": 1
     },
     "long_invoice_dispute": {
       "difficulty": "long-horizon",

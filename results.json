@@ -1,0 +1,360 @@
+{
+  "model": "meta-llama/Meta-Llama-3-8B-Instruct",
+  "api_base": "https://router.huggingface.co/v1",
+  "tasks": [
+    {
+      "task_id": "easy_perfect_match",
+      "decision": "APPROVE_FULL",
+      "approved_amount": 16936.87,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice $16,936.87 matches PO-4316 ($16,936.87) and GRN-4901 confirms all 81 units received. Freight $20.02 within $50 cap.",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0
+      },
+      "feedback": "Perfect decision!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_FULL\",\n  \"approved_amount\": 16936.87,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice $16,936.87 matches PO-4316 ($16,936.87) and GRN-4901 confirms all 81 units received. Freight $20.02 within $50 cap.\"\n}"
+    },
+    {
+      "task_id": "easy_no_po_found",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "NO_PO_FOUND",
+      "explanation": "Invoice INV-2024-1560 references PO-9639 but no matching OPEN Purchase Order exists in the system. Rejecting per Policy Rule 5.",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 1.0,
+        "amount_zero": 1.0
+      },
+      "feedback": "Correct \u2014 no PO, no payment!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"NO_PO_FOUND\",\n  \"explanation\": \"Invoice INV-2024-1560 references PO-9639 but no matching OPEN Purchase Order exists in the system. Rejecting per Policy Rule 5.\"\n}"
+    },
+    {
+      "task_id": "medium_quantity_shortfall",
+      "decision": "APPROVE_PARTIAL",
+      "approved_amount": 133000.0,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice $149,793.51 for 151 Lenovo IdeaPad 5 Pro units matches PO-4435 ($149,793.51) but GRN confirms only 133 units received. Approving $133,000.00 (133 units \u00d7 $992.01) per Quantity Rule 3.",
+      "score": 0.858,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 0.05
+      },
+      "feedback": "QUANTITY_MISMATCH is the appropriate reason code.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 133000.00,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice $149,793.51 for 151 Lenovo IdeaPad 5 Pro units matches PO-4435 ($149,793.51) but GRN confirms only 133 units received. Approving $133,000.00 (133 units \u00d7 $992.01) per Quantity Rule 3.\"\n}"
+    },
+    {
+      "task_id": "medium_price_discrepancy",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "PRICE_DISCREPANCY",
+      "explanation": "Invoice price $1167.74 deviates by 15.2% from PO price $1013.61, exceeding the 2.0% threshold. Rejecting per Policy Rule 4.",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 1.0,
+        "price_detection_in_explanation": 1.0
+      },
+      "feedback": "Correct \u2014 price deviation caught!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"PRICE_DISCREPANCY\",\n  \"explanation\": \"Invoice price $1167.74 deviates by 15.2% from PO price $1013.61, exceeding the 2.0% threshold. Rejecting per Policy Rule 4.\"\n}"
+    },
+    {
+      "task_id": "hard_policy_violation",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "POLICY_VIOLATION",
+      "explanation": "Freight charge $190.93 exceeds $50.00 cap. Rejecting unapproved freight per Policy Rule 2.",
+      "score": 0.95,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 1.0,
+        "policy_detection_in_explanation": 1.0,
+        "process_bonus": 0.0
+      },
+      "feedback": "Excellent policy enforcement!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"POLICY_VIOLATION\",\n  \"explanation\": \"Freight charge $190.93 exceeds $50.00 cap. Rejecting unapproved freight per Policy Rule 2.\"\n}"
+    },
+    {
+      "task_id": "hard_duplicate_invoice",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "DUPLICATE_INVOICE",
+      "explanation": "Vendor confirmed INV-2024-1572 was paid in a prior cycle. Rejecting duplicate per Policy Rule 6.",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 1.0,
+        "duplicate_detection_in_explanation": 1.0,
+        "process_bonus": 0.1
+      },
+      "feedback": "Duplicate correctly identified!",
+      "steps_taken": 2,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"DUPLICATE_INVOICE\",\n  \"explanation\": \"Vendor confirmed INV-2024-1572 was paid in a prior cycle. Rejecting duplicate per Policy Rule 6.\"\n}"
+    },
+    {
+      "task_id": "medium_split_delivery",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "NO_PO_FOUND",
+      "explanation": "Unable to parse response; defaulting to safe rejection.",
+      "score": 0.01,
+      "breakdown": {
+        "decision": 0.0,
+        "amount": 0.0,
+        "reason": 0.05
+      },
+      "feedback": "Both GRNs together confirm all 137 units received \u2014 APPROVE_FULL. MATCH_CONFIRMED is correct \u2014 all goods received across two shipments.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 78140.69 * (92 + 45) / 137,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice $78140.69 for 137 units of ThinkPad L15 Gen-4 Laptop matches PO-3399 ($78140.69) and GRNs GRN-3818 (92 units) and GRN-3603 (45 units) for a total of 137 units received. Approving $78140.69 for 137 units received.\"\n}"
+    },
+    {
+      "task_id": "medium_vendor_mismatch",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "VENDOR_MISMATCH",
+      "explanation": "Invoice vendor 'CompuSource Inc' does not match PO vendor 'CompuSource Inc.' exactly. Rejecting per Policy Rule 7.",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 1.0,
+        "vendor_mismatch_cited": 1.0,
+        "amount_zero": 1.0
+      },
+      "feedback": "Correct \u2014 vendor mismatch detected!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"VENDOR_MISMATCH\",\n  \"explanation\": \"Invoice vendor 'CompuSource Inc' does not match PO vendor 'CompuSource Inc.' exactly. Rejecting per Policy Rule 7.\"\n}"
+    },
+    {
+      "task_id": "hard_partial_po_match",
+      "decision": "APPROVE_PARTIAL",
+      "approved_amount": 16927.05,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice price for Dell XPS 15 Business Laptop ($16,927.05) matches PO-4512 ($16,927.05) and GRN confirms 35 units received. Unauthorised Mesh Back Support Lumbar Cushion line is not payable.",
+      "score": 0.836,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 0.05,
+        "explanation_quality": 0.0
+      },
+      "feedback": "NO_PO_FOUND or POLICY_VIOLATION are appropriate reason codes.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 16927.05,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice price for Dell XPS 15 Business Laptop ($16,927.05) matches PO-4512 ($16,927.05) and GRN confirms 35 units received. Unauthorised Mesh Back Support Lumbar Cushion line is not payable.\"\n}"
+    },
+    {
+      "task_id": "hard_tax_discrepancy",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "POLICY_VIOLATION",
+      "explanation": "Invoice INV-2024-8505 includes unauthorised tax charge of $600.36, exceeding the PO-3708 total of $12,007.24. Rejecting as per Policy Rule 8: Authorised Charges.",
+      "score": 0.85,
+      "breakdown": {
+        "decision": 1.0,
+        "reason": 0.5,
+        "tax_detection_in_explanation": 1.0
+      },
+      "feedback": "TAX_DISCREPANCY is the correct reason code.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"POLICY_VIOLATION\",\n  \"explanation\": \"Invoice INV-2024-8505 includes unauthorised tax charge of $600.36, exceeding the PO-3708 total of $12,007.24. Rejecting as per Policy Rule 8: Authorised Charges.\"\n}"
+    },
+    {
+      "task_id": "hard_currency_conversion",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "NO_PO_FOUND",
+      "explanation": "Unable to parse response; defaulting to safe rejection.",
+      "score": 0.01,
+      "breakdown": {
+        "decision": 0.0,
+        "amount": 0.0,
+        "conversion_explained": 0.0,
+        "reason": 0.05
+      },
+      "feedback": "EUR 2,293.20 \u00d7 1.05 = USD 2,407.86. This within the PO authorized amount of USD 2,436.37. Explain the EUR\u2192USD conversion with specific values in your reasoning. MATCH_CONFIRMED is the correct reason code.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 2293.20 * 1.05,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice EUR 2,293.20 converted to USD $2,414.76 matches PO-4862 ($2,436.37) and GRN confirms all 45 units received. Freight $0.00 within $50 cap.\"\n}"
+    },
+    {
+      "task_id": "hard_currency_conversion",
+      "score": 0.01,
+      "error": "'charmap' codec can't encode character '\\u2192' in position 118: character maps to <undefined>"
+    },
+    {
+      "task_id": "hard_manager_preapproval",
+      "decision": "APPROVE_FULL",
+      "approved_amount": 10088.95,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice INV-2024-9355 matches PO-4940 ($10,017.56) and GRN-1198 confirms all 269 units received. Freight $71.39 pre-authorised by Finance Manager J. Henderson (MAP-2024-6593).",
+      "score": 0.99,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "explanation_quality": 1.0,
+        "reason": 1.0,
+        "process_bonus": 0.15
+      },
+      "feedback": "Correct \u2014 manager approval verified and invoice approved!",
+      "steps_taken": 2,
+      "raw_response": "{\n  \"decision\": \"APPROVE_FULL\",\n  \"approved_amount\": 10088.95,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice INV-2024-9355 matches PO-4940 ($10,017.56) and GRN-1198 confirms all 269 units received. Freight $71.39 pre-authorised by Finance Manager J. Henderson (MAP-2024-6593).\"\n}"
+    },
+    {
+      "task_id": "hard_credit_memo",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "NO_PO_FOUND",
+      "explanation": "Credit memo INV-2024-3747 lacks a valid OPEN PO reference. Rejecting credit memo per Policy Rule 9.",
+      "score": 0.95,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "credit_memo_cited": 0.5
+      },
+      "feedback": "Credit memo correctly processed!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"NO_PO_FOUND\",\n  \"explanation\": \"Credit memo INV-2024-3747 lacks a valid OPEN PO reference. Rejecting credit memo per Policy Rule 9.\"\n}"
+    },
+    {
+      "task_id": "long_invoice_dispute",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "PRICE_DISCREPANCY",
+      "explanation": "Invoice price $428.17 deviates by 22.8% from PO price $348.66, exceeding 0.5% threshold. Rejecting per Policy Rule 4.",
+      "score": 0.98,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 1.0,
+        "process_bonus": 0.08
+      },
+      "feedback": "Dispute resolved correctly!",
+      "steps_taken": 2,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"PRICE_DISCREPANCY\",\n  \"explanation\": \"Invoice price $428.17 deviates by 22.8% from PO price $348.66, exceeding 0.5% threshold. Rejecting per Policy Rule 4.\"\n}"
+    },
+    {
+      "task_id": "long_policy_migration",
+      "decision": "APPROVE_PARTIAL",
+      "approved_amount": 7152.19,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice $7152.19 matches PO-3908 ($7152.19) and GRN confirms all 28 units received. Freight $41.31 exceeds old cap of $30.00, but new cap is $51.86, which is above the freight charge. Approving full invoice amount per Policy Rule 1 and 3.",
+      "score": 0.616,
+      "breakdown": {
+        "decision": 0.3,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 0.8,
+        "process_bonus": 0.0
+      },
+      "feedback": "After the policy update, freight is within the NEW cap \u2014 APPROVE_FULL.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 7152.19,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice $7152.19 matches PO-3908 ($7152.19) and GRN confirms all 28 units received. Freight $41.31 exceeds old cap of $30.00, but new cap is $51.86, which is above the freight charge. Approving full invoice amount per Policy Rule 1 and 3.\"\n}"
+    },
+    {
+      "task_id": "long_batch_reconciliation",
+      "decision": "APPROVE_PARTIAL",
+      "approved_amount": 9741.4,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice price $9741.40 matches PO-1815 ($9800.08) and GRN confirms 20 units received. Freight $58.68 exceeds $75 cap, but no explicit approval found. Approving $9741.40 as per Quantity Rule 3.",
+      "score": 0.61,
+      "breakdown": {
+        "decision": 0.2,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 0.7
+      },
+      "feedback": "Invoice passes three-way match \u2014 APPROVE_FULL.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 9741.40,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice price $9741.40 matches PO-1815 ($9800.08) and GRN confirms 20 units received. Freight $58.68 exceeds $75 cap, but no explicit approval found. Approving $9741.40 as per Quantity Rule 3.\"\n}"
+    },
+    {
+      "task_id": "long_manager_chain",
+      "decision": "APPROVE_FULL",
+      "approved_amount": 8220.28,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice INV-2024-6855 matches PO-2409 ($8220.28) and GRN-1305 confirms all 56 units received. Freight $50.44 within $30 cap, but escalated to VP Finance for pre-approval check.",
+      "score": 0.85,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 1.0,
+        "process_bonus": 0.0
+      },
+      "feedback": "Use ESCALATE twice: once to manager (unavailable), once to VP Finance.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_FULL\",\n  \"approved_amount\": 8220.28,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice INV-2024-6855 matches PO-2409 ($8220.28) and GRN-1305 confirms all 56 units received. Freight $50.44 within $30 cap, but escalated to VP Finance for pre-approval check.\"\n}"
+    },
+    {
+      "task_id": "long_fraud_investigation",
+      "decision": "REJECT",
+      "approved_amount": 0.0,
+      "reason_code": "DUPLICATE_INVOICE",
+      "explanation": "INV-2024-4763 already appears in the paid ledger. Vendor confirmed it was a duplicate payment attempt, and we reject it per Policy Rule 6.",
+      "score": 0.875,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 0.7,
+        "process_bonus": 0.0
+      },
+      "feedback": "Use QUERY_VENDOR to document vendor's (false) claim. | ESCALATE to manager for ledger audit confirmation.",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"REJECT\",\n  \"approved_amount\": 0.0,\n  \"reason_code\": \"DUPLICATE_INVOICE\",\n  \"explanation\": \"INV-2024-4763 already appears in the paid ledger. Vendor confirmed it was a duplicate payment attempt, and we reject it per Policy Rule 6.\"\n}"
+    },
+    {
+      "task_id": "long_audit_trail",
+      "decision": "APPROVE_FULL",
+      "approved_amount": 11818.16,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice INV-2024-4297 matches PO-3519 ($11818.16) and GRN-3324 confirms all 33 units received. Freight $15.38 is within $75.00 cap per Policy Rule 2.",
+      "score": 0.95,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "audit_trail": 1.0,
+        "process_bonus": 0.0
+      },
+      "feedback": "Audit trail documented correctly!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_FULL\",\n  \"approved_amount\": 11818.16,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice INV-2024-4297 matches PO-3519 ($11818.16) and GRN-3324 confirms all 33 units received. Freight $15.38 is within $75.00 cap per Policy Rule 2.\"\n}"
+    },
+    {
+      "task_id": "long_multi_vendor_split",
+      "decision": "APPROVE_PARTIAL",
+      "approved_amount": 6784.8,
+      "reason_code": "MATCH_CONFIRMED",
+      "explanation": "Invoice $6,813.49 matches PO-3572 ($23,849.60) and GRN confirms 33 units received. Approving $6,784.80 for 33 units of Ergonomic Office Chair Model-X.",
+      "score": 0.94,
+      "breakdown": {
+        "decision": 1.0,
+        "amount": 1.0,
+        "reason": 1.0,
+        "explanation": 0.4
+      },
+      "feedback": "Split tranche correctly approved!",
+      "steps_taken": 1,
+      "raw_response": "{\n  \"decision\": \"APPROVE_PARTIAL\",\n  \"approved_amount\": 6784.80,\n  \"reason_code\": \"MATCH_CONFIRMED\",\n  \"explanation\": \"Invoice $6,813.49 matches PO-3572 ($23,849.60) and GRN confirms 33 units received. Approving $6,784.80 for 33 units of Ergonomic Office Chair Model-X.\"\n}"
+    }
+  ],
+  "mean_score": 0.8112,
+  "by_difficulty": {
+    "easy": 0.99,
+    "medium": 0.712,
+    "hard": 0.698,
+    "long-horizon": 0.832
+  },
+  "environment": "ap-commander",
+  "version": "4.0.0"
+}
