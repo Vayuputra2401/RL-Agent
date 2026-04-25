@@ -12,8 +12,8 @@ import numpy as np
 
 ENV_URL         = 'https://pathikreet-ap-clerk-env.hf.space'
 MODEL_NAME      = os.environ.get('MODEL_NAME', 'Qwen/Qwen2.5-7B-Instruct')
-NUM_EPOCHS      = int(os.environ.get('NUM_EPOCHS', '3'))
-NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '8'))
+NUM_EPOCHS      = int(os.environ.get('NUM_EPOCHS', '6'))
+NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '16'))
 LOG_SAMPLES_EVERY = 20   # print a sample generation every N reward calls
 
 SYSTEM_PROMPT = """You are an AI Accounts Payable Clerk. Review the invoice, PO, and GRN, then output ONLY valid JSON:
@@ -822,7 +822,7 @@ def main():
     model.gradient_checkpointing_enable()
 
     lora_cfg = LoraConfig(
-        r=16, lora_alpha=16,
+        r=16, lora_alpha=32,
         target_modules=['q_proj','k_proj','v_proj','o_proj','gate_proj','up_proj','down_proj'],
         lora_dropout=0, bias='none',
         task_type=TaskType.CAUSAL_LM,
@@ -840,12 +840,17 @@ def main():
     print(f'  Mean: {sum(baseline.values())/len(baseline):.3f}')
     model.train()
 
-    # Dataset contains ALL 17 tasks × 5 seeds = 85 prompts.
-    # gate_task() in env_reward_fn handles curriculum redirection at reward time:
-    # locked tasks (medium/hard/long) redirect to easy during early training.
-    # As curriculum unlocks thresholds, redirection stops and full task variety flows.
-    print(f'\n[DATASET] Building prompts ({len(TRAIN_TASKS)} tasks × 5 seeds = {len(TRAIN_TASKS)*5})...')
-    task_seed_pairs = [(tid, s) for tid in TRAIN_TASKS for s in range(1, 6)]
+    # Dataset: easy/medium × 5 seeds, hard/long × 10 seeds.
+    # Hard/long tasks get more variation to help discover multi-step sequences.
+    # Curriculum gating in env_reward_fn still applies — locked tasks redirect to easy.
+    _SEEDS_PER_DIFF = {'easy': 5, 'medium': 5, 'hard': 10, 'long': 10}
+    task_seed_pairs = [
+        (tid, s)
+        for tid in TRAIN_TASKS
+        for s in range(1, _SEEDS_PER_DIFF.get(_TASK_DIFFICULTY.get(tid, 'easy'), 5) + 1)
+    ]
+    total_prompts = len(task_seed_pairs)
+    print(f'\n[DATASET] Building prompts ({total_prompts} total: easy/medium×5 seeds, hard/long×10 seeds)...')
     rows = []
     for task_id, seed in task_seed_pairs:
         try:
@@ -862,25 +867,22 @@ def main():
             print(f'  skip {task_id} seed={seed}: {e}')
 
     dataset = Dataset.from_list(rows)
-    print(f'[DATASET] {len(dataset)} samples across {len(TRAIN_TASKS)} tasks '
-          f'({sum(1 for r in rows if _TASK_DIFFICULTY.get(r["task_id"],"easy")=="long")} long-horizon) '
-          f'| curriculum: {CURRICULUM.status_line()}')
+    by_diff = {d: sum(1 for r in rows if _TASK_DIFFICULTY.get(r['task_id'],'easy')==d) for d in ['easy','medium','hard','long']}
+    print(f'[DATASET] {len(dataset)} samples — easy:{by_diff["easy"]} medium:{by_diff["medium"]} hard:{by_diff["hard"]} long:{by_diff["long"]} | curriculum: {CURRICULUM.status_line()}')
 
     # Train
     print(f'\n[TRAIN] {NUM_EPOCHS} epochs | {NUM_GENERATIONS} generations/prompt | {len(dataset)} samples')
     model.train()
-    # generation_batch_size = per_device_train_batch_size (TRL default).
-    # TRL requires: generation_batch_size % num_generations == 0.
-    # Simplest fix: set per_device_train_batch_size = num_generations.
+    # per_device_train_batch_size must equal num_generations (TRL GRPO requirement).
     config = GRPOConfig(
         output_dir            = './ap_commander_grpo',
         num_train_epochs      = NUM_EPOCHS,
         per_device_train_batch_size = NUM_GENERATIONS,
         num_generations       = NUM_GENERATIONS,
-        gradient_accumulation_steps = 1,
-        learning_rate         = 2e-5,
-        max_completion_length = 250,
-        temperature           = 0.9,
+        gradient_accumulation_steps = 2,
+        learning_rate         = 1e-5,
+        max_completion_length = 300,
+        temperature           = 1.1,
         logging_steps         = 1,
         save_steps            = 999,
         report_to             = 'none',
@@ -1032,6 +1034,13 @@ def main():
         'epochs':          NUM_EPOCHS,
         'num_generations': NUM_GENERATIONS,
         'per_device_train_batch_size': NUM_GENERATIONS,
+        'gradient_accumulation_steps': 2,
+        'learning_rate':   1e-5,
+        'lora_r':          16,
+        'lora_alpha':      32,
+        'seeds_easy_medium': 5,
+        'seeds_hard_long':   10,
+        'total_train_prompts': len(dataset),
         'train_tasks':     TRAIN_TASKS,
         'eval_tasks':      list(EVAL_TASKS),
         'hardware':        'A10G (HF Spaces)',
