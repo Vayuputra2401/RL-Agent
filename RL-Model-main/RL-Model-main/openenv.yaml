@@ -1,0 +1,80 @@
+name: CrisisFlow
+version: "1.0.0"
+description: "Real-world flood disaster response simulation. An AI agent manages a city under flood crisis by dispatching rescues, sending alerts, and allocating scarce resources across 5 dynamic zones."
+tags:
+  - openenv
+  - disaster-response
+  - reinforcement-learning
+  - multi-step
+  - resource-allocation
+
+api:
+  base_url: "http://localhost:7860"
+  reset_endpoint: "/reset"
+  step_endpoint: "/step"
+  state_endpoint: "/state"
+  health_endpoint: "/health"
+
+action_space:
+  type: structured
+  fields:
+    - name: action_type
+      type: string
+      enum: [dispatch_rescue, send_alert, allocate_resource, wait]
+    - name: zone_id
+      type: string
+      enum: [NORTH, SOUTH, EAST, WEST, CENTER]
+      required: false
+    - name: resource_type
+      type: string
+      enum: [medical, food, shelter]
+      required: false
+    - name: resource_amount
+      type: integer
+      required: false
+    - name: priority
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      required: false
+
+observation_space:
+  type: structured
+  fields:
+    - name: zones
+      type: array[ZoneState]
+    - name: available_resources
+      type: object
+    - name: time_step
+      type: integer
+    - name: max_steps
+      type: integer
+    - name: people_saved
+      type: integer
+    - name: total_population
+      type: integer
+
+tasks:
+  - id: alert_identification
+    name: "Alert Identification"
+    difficulty: easy
+    max_steps: 5
+    reward_range: [0.0, 1.0]
+  - id: resource_prioritization
+    name: "Resource Prioritization"
+    difficulty: medium
+    max_steps: 8
+    reward_range: [0.0, 1.0]
+  - id: full_crisis_management
+    name: "Full Crisis Management"
+    difficulty: hard
+    max_steps: 12
+    reward_range: [0.0, 1.0]
+
+reward:
+  type: dense
+  range: [0.0, 1.0]
+  components:
+    - people_saved_ratio: 0.50
+    - correct_decisions: 0.20
+    - resource_efficiency: 0.20
+    - time_penalty: 0.10
