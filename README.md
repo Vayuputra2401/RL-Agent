@@ -21,7 +21,8 @@ tags:
 
 **Hackathon:** Meta PyTorch OpenEnv × Scaler School of Technology Grand Finale  
 **Team:** Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi  
-**Live environment:** https://pathikreet-ap-clerk-env.hf.space/docs
+**Live environment:** https://pathikreet-ap-clerk-env.hf.space/docs  
+**Technical documentation:** [TECHNICAL.md](TECHNICAL.md) — architecture, reward design, agent interactions, flowchart, API reference
 
 ---
 
