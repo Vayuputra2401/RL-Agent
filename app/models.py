@@ -219,7 +219,7 @@ class OversightAction(BaseModel):
 
 
 class OversightReward(BaseModel):
-    score:     float = Field(ge=0.01, le=0.99)
+    score:     float = Field(ge=-0.99, le=0.99)
     breakdown: Dict[str, Any]
     feedback:  str
     done:      bool = False
@@ -227,7 +227,7 @@ class OversightReward(BaseModel):
     @field_validator("score", mode="before")
     @classmethod
     def clamp_score(cls, v: float) -> float:
-        return max(0.01, min(0.99, float(v)))
+        return max(-0.99, min(0.99, float(v)))
 
 
 class OversightResetRequest(BaseModel):
