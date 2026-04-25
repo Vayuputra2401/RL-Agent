@@ -530,14 +530,12 @@ def main():
     print(f'  Mean: {sum(baseline.values())/len(baseline):.3f}')
     model.train()
 
-    # Build curriculum-weighted dataset.
-    # CurriculumSampler starts with only 'easy' unlocked; harder tasks unlock
-    # during training when easy mean ≥ 0.70 (medium) / medium mean ≥ 0.65 (hard).
-    # Dataset is built once at start — gating in env_reward_fn handles redirection.
-    print('\n[DATASET] Building curriculum-weighted prompts...')
-    task_seed_pairs = CURRICULUM.build_dataset_tasks()
-    print(f'[CURRICULUM] Initial unlocked: {sorted(CURRICULUM.unlocked)} — '
-          f'{len(task_seed_pairs)} task×seed pairs')
+    # Dataset contains ALL 10 tasks × 5 seeds = 50 prompts (same as Run 1).
+    # gate_task() in env_reward_fn handles curriculum redirection at score time:
+    # locked tasks get redirected to easy → model still trains, just on easier logic.
+    # As curriculum unlocks, redirection stops and model gets real hard task rewards.
+    print('\n[DATASET] Building prompts (all 10 tasks × 5 seeds = 50)...')
+    task_seed_pairs = [(tid, s) for tid in TRAIN_TASKS for s in range(1, 6)]
     rows = []
     for task_id, seed in task_seed_pairs:
         try:
@@ -554,7 +552,7 @@ def main():
             print(f'  skip {task_id} seed={seed}: {e}')
 
     dataset = Dataset.from_list(rows)
-    print(f'[DATASET] {len(dataset)} samples | {CURRICULUM.status_line()}')
+    print(f'[DATASET] {len(dataset)} samples across {len(TRAIN_TASKS)} tasks | curriculum: {CURRICULUM.status_line()}')
 
     # Train
     print(f'\n[TRAIN] {NUM_EPOCHS} epochs | {NUM_GENERATIONS} generations/prompt | {len(dataset)} samples')
