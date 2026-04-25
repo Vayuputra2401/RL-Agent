@@ -873,6 +873,10 @@ def main():
     # Train
     print(f'\n[TRAIN] {NUM_EPOCHS} epochs | {NUM_GENERATIONS} generations/prompt | {len(dataset)} samples')
     model.train()
+    _cuda_ok  = torch.cuda.is_available()
+    _use_bf16 = _cuda_ok and torch.cuda.get_device_capability()[0] >= 8  # Ampere+ (A100, H100)
+    _use_fp16 = _cuda_ok and not _use_bf16
+    print(f'[DTYPE] cuda={_cuda_ok} bf16={_use_bf16} fp16={_use_fp16}')
     # per_device_train_batch_size must equal num_generations (TRL GRPO requirement).
     config = GRPOConfig(
         output_dir            = './ap_commander_grpo',
@@ -883,6 +887,8 @@ def main():
         learning_rate         = 1e-5,
         max_completion_length = 300,
         temperature           = 1.1,
+        bf16                  = _use_bf16,
+        fp16                  = _use_fp16,
         logging_steps         = 1,
         save_steps            = 999,
         report_to             = 'none',
