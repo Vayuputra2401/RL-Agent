@@ -400,9 +400,10 @@ All results save to timestamped folders under `runs/` — re-running never overw
 | Colab notebook | https://github.com/Vayuputra2401/RL-Agent/blob/main/training/colab_training.ipynb |
 | Training logs (all runs) | https://github.com/Vayuputra2401/RL-Agent/tree/main/runs/grpo |
 | Baseline logs | https://github.com/Vayuputra2401/RL-Agent/tree/main/runs/baselines |
+| Technical documentation | https://github.com/Vayuputra2401/RL-Agent/blob/main/TECHNICAL.md |
 | GitHub | https://github.com/Vayuputra2401/RL-Agent |
 | Presentation (Canva) | https://canva.link/k7f87ccul4fznaf |
 
 ---
 
-The environment is live, the reward signal has no shortcuts, and every run is timestamped in `runs/` — nothing overwritten, nothing cherry-picked. The training evidence is there for anyone who wants to verify it.
+The environment is live, every run is timestamped in `runs/`, and nothing has been overwritten or cherry-picked. The training evidence is there if anyone wants to dig into it.

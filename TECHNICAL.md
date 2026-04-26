@@ -65,42 +65,71 @@ RL-Agent/
 
 ## 3. Agent Interaction Flowchart
 
-```mermaid
-flowchart TD
-    A([Training Loop / Inference]) -->|POST /reset\ntask_id + seed| B[APClerkEnvironment.reset]
-    B --> C[Task Generator\ncreates invoice + PO + GRN]
-    C --> D[Actor Agents\npre-generate context_notes\nVendor / Manager / Compliance]
-    D --> E[context_notes stored\nin _context_store\nhidden from agent]
-    E --> F([Observation returned\nto agent])
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          AP CLERK EPISODE LOOP                                  │
+│                                                                                 │
+│   Training Loop / Inference                                                     │
+│          │                                                                      │
+│          │  POST /reset  (task_id + seed)                                       │
+│          ▼                                                                      │
+│   APClerkEnvironment.reset                                                      │
+│          │                                                                      │
+│          ├─▶ Task Generator  →  invoice + PO + GRN                              │
+│          │                                                                      │
+│          └─▶ Actor Agents pre-generate context_notes                            │
+│                (Vendor / Manager / Compliance)                                  │
+│                stored hidden in _context_store                                  │
+│          │                                                                      │
+│          ▼                                                                      │
+│   Observation returned to agent  ◀──────────────────────────┐                  │
+│          │                                                   │                  │
+│          ▼                                                   │                  │
+│   Agent Decision                                             │                  │
+│          │                                                   │                  │
+│          ├─ ESCALATE / QUERY_VENDOR / HOLD ─▶ Intermediate Step                │
+│          │                                    context_note revealed             │
+│          │                                    appended to obs.context_notes ───┘│
+│          │                                                                      │
+│          └─ APPROVE_FULL / APPROVE_PARTIAL / REJECT  ──┐                       │
+│             (or step limit reached)                     │                       │
+│                                                         ▼                       │
+│                                                  Grader called                  │
+│                                                  decision_score × weight        │
+│                                                  amount_score   × weight        │
+│                                                  reason_score   × weight        │
+│                                                  expl_score     × weight        │
+│                                                  + process_bonus (multi-step)   │
+│                                                         │                       │
+│                                                  score clamped to 0.01–0.99     │
+│                                                         │                       │
+│                                                  Reward → GRPO Trainer          │
+│                                                         │                       │
+│                                              group-relative advantage           │
+│                                                         │                       │
+│                                              LoRA weight update ──▶ loop        │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
-    F --> G{Agent Decision}
-
-    G -->|ESCALATE\nQUERY_VENDOR\nHOLD| H[Intermediate Step\ncontext_note revealed\nfrom _context_store]
-    H --> I[Actor response\nappended to\nobs.context_notes]
-    I --> F
-
-    G -->|APPROVE_FULL\nAPPROVE_PARTIAL\nREJECT| J[Terminal Step\ngrade_action called]
-    G -->|at step limit| J
-
-    J --> K[Grader\ndecision_score × weight\namount_score × weight\nreason_score × weight\nexpl_score × weight\nprocess_bonus if multi-step]
-    K --> L[Score clamped\nto 0.01 – 0.99]
-    L --> M([Reward returned\nto training loop])
-
-    M --> N{GRPO Trainer}
-    N -->|group-relative advantage| O[LoRA weight update]
-    O --> A
-
-    subgraph Oversight
-        P([POST /oversight/reset]) --> Q[OversightEnvironment\n3–5 episode summaries\n1 may be fraudulent]
-        Q --> R([Oversight Agent\nverdict per episode])
-        R --> S[Oversight Grader\n+0.70 correct flag\n+0.20 cited signal\n-0.25 false positive]
-    end
-
-    subgraph Curriculum
-        T([GET /curriculum/next_task]) --> U[Server-side history\nkeyed by X-Run-Id]
-        U --> V{Score thresholds\neasy≥0.70 → medium\nmedium≥0.65 → hard\nhard≥0.60 → long}
-        V --> W([Next task returned])
-    end
+┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
+│        OVERSIGHT (Fleet AI)          │   │         ADAPTIVE CURRICULUM          │
+│                                      │   │                                      │
+│  POST /oversight/reset               │   │  GET /curriculum/next_task           │
+│         │                            │   │         │                            │
+│         ▼                            │   │         ▼                            │
+│  OversightEnvironment                │   │  Server-side history                 │
+│  3–5 episode summaries               │   │  keyed by X-Run-Id header            │
+│  1–2 may be fraudulent               │   │         │                            │
+│         │                            │   │  Score thresholds:                   │
+│         ▼                            │   │  easy   ≥ 0.70 → unlock medium      │
+│  Oversight Agent verdict             │   │  medium ≥ 0.65 → unlock hard        │
+│  per episode                         │   │  hard   ≥ 0.60 → unlock long        │
+│         │                            │   │         │                            │
+│         ▼                            │   │         ▼                            │
+│  Oversight Grader:                   │   │  Next task returned                  │
+│  +0.70 correct flag                  │   │                                      │
+│  +0.20 cited numeric signal          │   │                                      │
+│  -0.25 false positive                │   │                                      │
+└──────────────────────────────────────┘   └──────────────────────────────────────┘
 ```
 
 ---
