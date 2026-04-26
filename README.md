@@ -114,6 +114,7 @@ APObservation
 
 ![Live reward curve and stats](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/training_dashboard_step150.png)
 ![Decision distribution and per-task rewards](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/training_decision_dist.png)
+![Loss and gradient norm curve](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/loss_curve.png)
 
 > **Recent mean reward 0.746** at step 150. Single-step REJECT tasks learned quickly (Price Discrepancy 0.96, Vendor Mismatch 0.94, Tax Discrepancy 0.92). Multi-step tasks still failing (Duplicate Invoice 0.07, Policy Violation 0.09) — correct action sequences (QUERY_VENDOR → REJECT, ESCALATE → REJECT) require more epochs to discover.
 

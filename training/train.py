@@ -775,6 +775,56 @@ def _make_run_dir() -> str:
     return run_dir
 
 
+def _save_loss_curve(trainer, run_dir: str):
+    """Extract loss + grad_norm from TRL trainer log history and save as loss_curve.png."""
+    try:
+        history = trainer.state.log_history
+        steps = [e['step'] for e in history if 'loss' in e]
+        losses = [e['loss'] for e in history if 'loss' in e]
+        grads  = [e.get('grad_norm', None) for e in history if 'loss' in e]
+
+        BG, TEXT, BLUE, ORANGE = '#0d1117', '#e6edf3', '#58a6ff', '#f0883e'
+        fig, axes = plt.subplots(2, 1, figsize=(10, 6), facecolor=BG)
+        fig.suptitle(
+            f'AP Commander GRPO — Loss & Gradient Norm | {MODEL_NAME.split("/")[-1]}',
+            color=TEXT, fontsize=11, fontweight='bold'
+        )
+
+        ax1 = axes[0]
+        ax1.set_facecolor(BG)
+        ax1.plot(steps, losses, color=BLUE, linewidth=1.2, alpha=0.6, label='per-step loss')
+        if len(steps) > 10:
+            smooth = [sum(losses[max(0,i-10):i+1])/len(losses[max(0,i-10):i+1]) for i in range(len(losses))]
+            ax1.plot(steps, smooth, color=BLUE, linewidth=2, label='smooth (w=10)')
+        ax1.axhline(0, color='white', linewidth=0.5, alpha=0.3)
+        ax1.set_ylabel('Loss', color=TEXT); ax1.set_xlabel('')
+        ax1.tick_params(colors=TEXT); ax1.spines[:].set_color('#30363d')
+        ax1.legend(facecolor=BG, labelcolor=TEXT, fontsize=8)
+        for spine in ax1.spines.values(): spine.set_color('#30363d')
+
+        ax2 = axes[1]
+        ax2.set_facecolor(BG)
+        valid_grads = [(s, g) for s, g in zip(steps, grads) if g is not None]
+        if valid_grads:
+            gs, gv = zip(*valid_grads)
+            ax2.plot(gs, gv, color=ORANGE, linewidth=1.2, alpha=0.7)
+        ax2.set_ylabel('Grad Norm', color=TEXT); ax2.set_xlabel('Training Step', color=TEXT)
+        ax2.tick_params(colors=TEXT)
+        for spine in ax2.spines.values(): spine.set_color('#30363d')
+
+        fig.text(0.5, 0.01,
+                 f'GRPO loss (group-relative policy gradient). Negative values normal mid-training. '
+                 f'Grad norm collapse (<0.1) indicates entropy saturation.',
+                 ha='center', color='#8b949e', fontsize=7)
+        plt.tight_layout(rect=[0, 0.04, 1, 1])
+        out = os.path.join(run_dir, 'loss_curve.png')
+        plt.savefig(out, dpi=130, bbox_inches='tight', facecolor=BG)
+        plt.close()
+        print(f'[LOSS CURVE] Saved {out} ({len(steps)} steps)')
+    except Exception as e:
+        print(f'[LOSS CURVE] skipped: {e}')
+
+
 def main():
     # Authenticate with HF Hub if token provided (needed for gated models like Llama-3)
     hf_token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
@@ -906,6 +956,9 @@ def main():
     )
     result = trainer.train()
     print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
+
+    # Save loss curve from TRL trainer log history
+    _save_loss_curve(trainer, RUN_DIR)
 
     METRICS.print_summary()
     METRICS.save_all_metrics_figures(RUN_DIR)

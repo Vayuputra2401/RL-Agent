@@ -21,6 +21,20 @@ from typing import Optional, Tuple, Dict, Any, List
 from .models import APObservation, APAction, APReward, DecisionType
 from .tasks import TASKS, grade_action
 
+# OpenEnv base class — use real package if available, else local stub
+try:
+    from openenv.core.env_server import Environment as _OpenEnvBase
+except ImportError:
+    class _OpenEnvBase:  # type: ignore[no-redef]
+        """Stub matching the OpenEnv Environment interface."""
+        def reset(self, seed=None, episode_id=None, **kwargs):
+            raise NotImplementedError
+        def step(self, action, timeout_s=None, **kwargs):
+            raise NotImplementedError
+        @property
+        def state(self):
+            raise NotImplementedError
+
 # Intermediate actions: do not end the episode, reveal context instead
 _INTERMEDIATE = frozenset({
     DecisionType.QUERY_VENDOR,
@@ -30,7 +44,7 @@ _INTERMEDIATE = frozenset({
 })
 
 
-class APClerkEnvironment:
+class APClerkEnvironment(_OpenEnvBase):
     """
     AP Commander — AI Accounts Payable Clerk Environment.
 

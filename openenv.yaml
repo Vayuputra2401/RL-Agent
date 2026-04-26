@@ -1,3 +1,4 @@
+spec_version: 1
 name: ap-commander
 version: "4.0.0"
 description: >
@@ -19,6 +20,10 @@ description: >
 author: "Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi"
 entrypoint: "uvicorn app.main:app --host 0.0.0.0 --port 7860"
 base_url: "http://localhost:7860"
+action: APAction
+observation: APObservation
+environment_class: APClerkEnvironment
+runtime: fastapi
 tags:
   - finance
   - enterprise
