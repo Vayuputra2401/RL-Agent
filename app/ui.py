@@ -99,91 +99,71 @@ section{position:relative;z-index:1;padding:100px 40px}
 .tag.teal{background:rgba(20,184,166,0.1);color:var(--teal);border-color:rgba(20,184,166,0.2)}
 .tag.purple{background:rgba(139,92,246,0.1);color:var(--purple);border-color:rgba(139,92,246,0.2)}
 
-/* ── DEMO SECTION ── */
+/* ── EPISODE WALKTHROUGH ── */
 #demo{background:var(--bg)}
-.demo-controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:28px;background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:20px 24px}
-.field{display:flex;flex-direction:column;gap:5px}
-.field label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--dim)}
-select,input[type=number],input[type=text],textarea{background:rgba(2,8,23,0.8);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;transition:border-color .2s}
-select:focus,input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,0.1)}
-select{min-width:240px;cursor:pointer}
-input[type=number]{width:90px}
-textarea{resize:vertical;min-height:72px;width:100%}
-.btn-run{background:var(--grad);color:#020817;font-weight:800;font-size:14px;padding:10px 22px;border-radius:8px;border:none;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;white-space:nowrap}
-.btn-run:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px rgba(14,165,233,0.3)}
-.btn-run:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.btn-submit{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.35);font-weight:700;font-size:14px;padding:10px 22px;border-radius:8px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
-.btn-submit:hover:not(:disabled){background:rgba(34,197,94,0.25);box-shadow:0 0 20px rgba(34,197,94,0.2)}
-.btn-submit:disabled{opacity:.4;cursor:not-allowed}
-
-.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.demo-grid.single{grid-template-columns:1fr}
-
-/* Doc cards */
+.ep-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:40px;align-items:center}
+.ep-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--glass);color:var(--dim);backdrop-filter:blur(8px)}
+.ep-pill.primary{border-color:var(--border2);color:var(--accent);background:rgba(14,165,233,0.08)}
+.ep-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.4s ease-in-out infinite}
+.ep-layout{display:grid;grid-template-columns:2fr 3fr;gap:24px;margin-bottom:48px}
+.ep-obs{display:flex;flex-direction:column;gap:14px}
 .doc-card{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}
 .doc-card:hover{border-color:rgba(14,165,233,0.3)}
 .doc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:6px}
 .doc-label::after{content:'';flex:1;height:1px;background:var(--border)}
 .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px;flex-wrap:wrap}
 .inv-id{font-size:11px;color:var(--dim);font-family:monospace}
-.inv-vendor{font-size:16px;font-weight:800;color:var(--text);letter-spacing:-.3px}
-.inv-total{font-size:28px;font-weight:900;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-1px;white-space:nowrap}
+.inv-vendor{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.3px}
+.inv-total{font-size:26px;font-weight:900;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-1px;white-space:nowrap}
 table.items{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
 table.items th{color:var(--dim);font-weight:600;text-align:left;padding:3px 8px 5px 0;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
 table.items td{padding:4px 8px 4px 0;border-bottom:1px solid rgba(14,165,233,0.06)}
 table.items tr:last-child td{border-bottom:none}
 .freight-ok{color:var(--dim)}
-.freight-warn{color:var(--yellow);font-weight:600}
-.freight-over{color:var(--red);font-weight:700}
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 .badge-open{background:rgba(34,197,94,0.12);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
-.badge-closed{background:rgba(71,85,105,0.2);color:var(--dim);border:1px solid var(--border)}
 .po-row{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .po-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
 .po-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
 .po-num{font-size:13px;font-weight:700;font-family:monospace;color:var(--text)}
 .po-vendor{font-size:12px;color:var(--dim)}
-.grn-row{margin-bottom:8px}
-.grn-row:last-child{margin-bottom:0}
+.grn-row{margin-bottom:8px}.grn-row:last-child{margin-bottom:0}
 .grn-id{font-size:12px;font-weight:700;font-family:monospace;color:var(--teal);margin-bottom:4px}
-
-.alert-duplicate{display:flex;align-items:center;gap:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);font-weight:600;margin-bottom:16px}
-.context-note{display:flex;gap:10px;background:rgba(14,165,233,0.07);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;color:var(--text);margin-bottom:8px}
-.step-indicator{display:inline-flex;align-items:center;gap:8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--purple);font-weight:700;margin-bottom:16px}
-.step-dots{display:flex;gap:4px;margin-left:4px}
-.step-dot{width:7px;height:7px;border-radius:50%;background:rgba(139,92,246,0.3)}
-.step-dot.done{background:var(--purple)}
-.step-dot.active{background:var(--accent);box-shadow:0 0 6px var(--accent)}
-
-/* Action form */
-.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.span2{grid-column:1/-1}
-.form-actions{display:flex;align-items:center;gap:12px;margin-top:16px}
-
-/* Result */
-.result-score-row{display:flex;align-items:center;gap:20px;margin-bottom:20px}
-.score-number{font-size:52px;font-weight:900;letter-spacing:-2px;line-height:1}
-.score-bar-wrap{flex:1}
-.score-bar-bg{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin-bottom:6px}
-.score-bar-fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}
-.score-verdict{font-size:13px;color:var(--dim)}
-.comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px}
-.comp-item{background:rgba(14,165,233,0.05);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
-.comp-name{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
-.comp-val{font-size:16px;font-weight:800;font-family:monospace}
-.done-banner{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px 16px;color:var(--green);font-weight:700;font-size:14px;text-align:center;margin-top:8px}
-.continue-banner{background:rgba(14,165,233,0.07);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--accent);font-size:13px;text-align:center;margin-top:8px}
-
-/* Policy accordion */
-.policy-toggle{width:100%;background:none;border:1px solid var(--border);color:var(--dim);padding:10px 14px;border-radius:8px;cursor:pointer;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s,color .2s;margin-top:12px}
-.policy-toggle:hover{border-color:var(--accent);color:var(--accent)}
-.policy-box{background:rgba(2,8,23,0.5);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;color:var(--dim);white-space:pre-wrap;max-height:140px;overflow-y:auto;margin-top:6px;font-family:monospace;line-height:1.6;display:none}
-
-/* Task chips */
-.task-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
-.task-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--glass);font-size:11px;cursor:pointer;transition:all .2s;backdrop-filter:blur(8px)}
-.task-chip:hover,.task-chip.active{border-color:var(--accent);background:rgba(14,165,233,0.1);color:var(--text)}
-.task-chip .diff-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+/* Step timeline */
+.ep-steps{display:flex;flex-direction:column;gap:0}
+.step-card{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:20px 22px;transition:border-color .2s}
+.step-card:hover{border-color:var(--border2)}
+.step-card.terminal{border-color:rgba(34,197,94,0.3)}
+.step-connector{display:flex;align-items:center;padding-left:24px;height:28px;color:var(--dimmer);font-size:18px}
+.step-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.step-num{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--dimmer)}
+.step-action-badge{display:inline-flex;align-items:center;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:800;font-family:monospace;letter-spacing:.3px}
+.step-action-badge.query{background:rgba(14,165,233,0.15);color:var(--accent);border:1px solid rgba(14,165,233,0.3)}
+.step-action-badge.escalate{background:rgba(139,92,246,0.15);color:var(--purple);border:1px solid rgba(139,92,246,0.3)}
+.step-action-badge.terminal-ok{background:rgba(34,197,94,0.12);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+.step-json{background:rgba(2,8,23,0.7);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:11px;font-family:monospace;color:var(--dim);line-height:1.6;margin-bottom:12px;white-space:pre-wrap;word-break:break-word}
+.step-json .k{color:var(--accent)}.step-json .v{color:var(--text)}.step-json .n{color:var(--teal)}
+.step-reveal{display:flex;align-items:flex-start;gap:10px;border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:var(--text);line-height:1.6;background:rgba(14,165,233,0.07)}
+.step-reveal.mgr{border-left-color:var(--purple);background:rgba(139,92,246,0.07)}
+.reveal-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;padding-top:1px;color:var(--accent)}
+.reveal-lbl.mgr{color:var(--purple)}
+.step-score{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.step-score-num{font-size:38px;font-weight:900;letter-spacing:-1px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.step-score-lbl{font-size:12px;color:var(--dim);line-height:1.6}
+/* Reward breakdown */
+.reward-section{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:16px;padding:32px}
+.reward-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:24px;display:flex;align-items:center;gap:8px}
+.reward-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.reward-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.rw-row{display:flex;flex-direction:column;gap:5px}
+.rw-label{display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:8px}
+.rw-name{color:var(--dim);font-weight:600;flex:1}
+.rw-val{font-weight:800;font-family:monospace;color:var(--text);white-space:nowrap}
+.rw-bar-bg{height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.rw-bar-fill{height:100%;border-radius:3px;background:var(--grad)}
+.reward-formula{background:rgba(2,8,23,0.6);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12px;font-family:monospace;color:var(--dim);line-height:2;text-align:center}
+.reward-formula .hl{color:var(--accent);font-weight:700}
+.reward-formula .total{color:var(--green);font-size:16px;font-weight:900}
 
 /* ── FOOTER ── */
 footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid var(--border);padding:48px 40px 32px}
@@ -231,10 +211,10 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
   </a>
   <div class="nav-links">
     <a href="#how">How It Works</a>
-    <a href="#demo">Live Demo</a>
+    <a href="#demo">Episode Demo</a>
     <a href="https://pathikreet-ap-clerk-env.hf.space/docs" target="_blank">API Docs ↗</a>
     <a href="https://github.com/Vayuputra2401/RL-Agent" target="_blank">GitHub ↗</a>
-    <a href="#demo" class="nav-cta">Try Demo</a>
+    <a href="#demo" class="nav-cta">See Demo</a>
     <div class="health-pill">
       <span id="health-dot" class="health-dot" title="Checking…"></span>
       <span id="health-text" style="font-size:11px;">Connecting</span>
@@ -249,7 +229,7 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
   <h1 class="hero-title">The AI Agent That<br><span class="grad-text">Pays Invoices</span><br>— and Catches Fraud</h1>
   <p class="hero-sub">AP Commander trains large language models to navigate enterprise Accounts Payable workflows with the rigor a CFO would require. 24 tasks. 2 AI agents. Rewards with no shortcuts.</p>
   <div class="hero-actions">
-    <a href="#demo" class="btn btn-primary">▶ &nbsp;Try Live Demo</a>
+    <a href="#demo" class="btn btn-primary">▶ &nbsp;See Episode Demo</a>
     <a href="https://pathikreet-ap-clerk-env.hf.space/docs" target="_blank" class="btn btn-secondary">API Documentation ↗</a>
   </div>
   <div class="hero-meta">
@@ -335,128 +315,153 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
 <section id="demo" style="background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);">
   <div class="container">
     <div class="section-header">
-      <div class="section-label">Live Demo</div>
-      <h2 class="section-title">Try an <span class="grad-text">Episode Now</span></h2>
-      <p class="section-sub">Pick any task, generate a fresh invoice scenario, submit your decision, and see the reward breakdown — no code needed.</p>
+      <div class="section-label">Episode Walkthrough</div>
+      <h2 class="section-title">See the Agent <span class="grad-text">Reason</span></h2>
+      <p class="section-sub">A real episode from the environment — same invoice, same policy, same reward function the model trains against. This is what a well-trained agent learns to do.</p>
     </div>
 
-    <!-- Controls -->
-    <div class="demo-controls">
-      <div class="field">
-        <label>Task</label>
-        <select id="task-select" onchange="onTaskChange()"><option>Loading…</option></select>
-      </div>
-      <div class="field">
-        <label>Seed</label>
-        <input id="seed-input" type="number" value="42" min="1" max="9999">
-      </div>
-      <button id="new-ep-btn" class="btn-run" onclick="newEpisode()">
-        <span id="btn-icon">▶</span> New Episode
-      </button>
+    <!-- Episode metadata -->
+    <div class="ep-meta">
+      <div class="ep-pill primary"><span class="dot"></span>&nbsp;long_invoice_dispute</div>
+      <div class="ep-pill">Seed 42</div>
+      <div class="ep-pill">max 12 steps</div>
+      <div class="ep-pill">difficulty: long-horizon</div>
+      <div class="ep-pill">3 actions taken</div>
     </div>
 
-    <p id="task-desc" class="hidden" style="font-size:13px;color:var(--dim);margin-bottom:16px;padding:10px 16px;background:rgba(14,165,233,0.06);border-radius:8px;border-left:3px solid var(--accent);"></p>
-
-    <!-- Task chips -->
-    <div id="task-chips" class="task-chips"></div>
-
-    <!-- Episode content -->
-    <div id="episode-area" class="hidden" style="margin-top:28px;">
-
-      <div id="step-indicator" class="step-indicator hidden">
-        <span>Step</span>
-        <strong id="step-num">1</strong>
-        <span>of</span>
-        <strong id="step-max">3</strong>
-        <div id="step-dots" class="step-dots"></div>
-      </div>
-
-      <div id="dupe-alert" class="alert-duplicate hidden">
-        ⚠ DUPLICATE DETECTED — This invoice ID already appears in the paid ledger
-      </div>
-
-      <div id="context-notes-wrap"></div>
-
-      <div class="demo-grid" id="obs-grid">
-
-        <!-- Left col: invoice + POs + GRNs + policy -->
-        <div style="display:flex;flex-direction:column;gap:14px;">
-          <div class="doc-card">
-            <div class="doc-label">Invoice</div>
-            <div id="invoice-body"></div>
+    <div class="ep-layout">
+      <!-- Left: observation documents -->
+      <div class="ep-obs">
+        <div class="doc-card">
+          <div class="doc-label">Invoice</div>
+          <div class="inv-header">
+            <div><div class="inv-id">INV-2024-7831</div><div class="inv-vendor">TechProcure Global</div></div>
+            <div class="inv-total">$4,662.00</div>
           </div>
-          <div class="doc-card">
-            <div class="doc-label">Purchase Orders</div>
-            <div id="po-body"></div>
-          </div>
-          <div class="doc-card">
-            <div class="doc-label">Goods Receipts</div>
-            <div id="grn-body"></div>
-          </div>
-          <button class="policy-toggle" onclick="togglePolicy()">Company Policy <span id="pol-arrow">▼</span></button>
-          <div id="policy-box" class="policy-box"></div>
+          <table class="items">
+            <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>
+              <tr><td>ThinkPad L15 Gen-4</td><td style="text-align:right">12</td><td style="text-align:right;color:var(--red);font-weight:700">$385.00</td><td style="text-align:right;font-weight:600">$4,620.00</td></tr>
+              <tr class="freight-ok"><td colspan="3">Freight</td><td style="text-align:right">$42.00</td></tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- Right col: action form + result -->
-        <div style="display:flex;flex-direction:column;gap:14px;">
-
-          <!-- Action form -->
-          <div class="doc-card" id="action-card">
-            <div class="doc-label">Your Decision</div>
-            <div class="action-grid">
-              <div class="field">
-                <label>Decision</label>
-                <select id="a-decision">
-                  <option>APPROVE_FULL</option>
-                  <option>APPROVE_PARTIAL</option>
-                  <option selected>REJECT</option>
-                  <option>QUERY_VENDOR</option>
-                  <option>ESCALATE</option>
-                  <option>HOLD</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Amount ($)</label>
-                <input id="a-amount" type="number" value="0.00" min="0" step="0.01">
-              </div>
-              <div class="field span2">
-                <label>Reason Code</label>
-                <select id="a-reason">
-                  <option>MATCH_CONFIRMED</option><option>QUANTITY_MISMATCH</option>
-                  <option>PRICE_DISCREPANCY</option><option>POLICY_VIOLATION</option>
-                  <option>NO_PO_FOUND</option><option selected>DUPLICATE_INVOICE</option>
-                  <option>VENDOR_MISMATCH</option><option>TAX_DISCREPANCY</option>
-                  <option>PENDING_CLARIFICATION</option><option>MANAGER_REVIEW</option>
-                </select>
-              </div>
-              <div class="field span2">
-                <label>Explanation &nbsp;<span style="color:var(--dimmer);text-transform:none;letter-spacing:0;font-weight:400;">(cite specific $ amounts)</span></label>
-                <textarea id="a-explain" placeholder="e.g. Invoice $4,200 matches PO-991 line items but INV-2847 already appears in the paid ledger — rejecting as duplicate payment."></textarea>
-              </div>
+        <div class="doc-card">
+          <div class="doc-label">Purchase Order</div>
+          <div class="po-row">
+            <div class="po-header">
+              <span class="po-num">PO-2847</span>
+              <span class="badge badge-open">OPEN</span>
+              <span class="po-vendor">TechProcure Global</span>
             </div>
-            <div class="form-actions">
-              <button id="submit-btn" class="btn-submit" onclick="submitAction()">Submit Action</button>
-              <span id="submit-spin" class="spinner hidden"></span>
-            </div>
+            <div style="font-size:11px;color:var(--dim);font-family:monospace">ThinkPad L15 Gen-4 · qty 12 @ <span style="color:var(--green);font-weight:700">$350.00</span></div>
+            <div style="font-size:10px;color:var(--yellow);margin-top:5px;font-weight:600">⚠ Invoice price $385.00 exceeds agreed $350.00 by 10%</div>
           </div>
-
-          <!-- Result -->
-          <div class="doc-card hidden" id="result-card">
-            <div class="doc-label">Result</div>
-            <div class="result-score-row">
-              <div id="score-num" class="score-number">—</div>
-              <div class="score-bar-wrap">
-                <div class="score-bar-bg">
-                  <div id="score-bar" class="score-bar-fill" style="width:0%"></div>
-                </div>
-                <div id="score-verdict" class="score-verdict"></div>
-              </div>
-            </div>
-            <div id="comp-grid" class="comp-grid"></div>
-            <div id="result-banner"></div>
-          </div>
-
         </div>
+
+        <div class="doc-card">
+          <div class="doc-label">Goods Receipt</div>
+          <div class="grn-row">
+            <div class="grn-id">GRN-1094</div>
+            <div style="font-size:11px;color:var(--dim);font-family:monospace">ThinkPad L15 Gen-4 · received <strong style="color:var(--teal)">12</strong></div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-label">Company Policy</div>
+          <div style="font-size:11px;color:var(--dim);font-family:monospace;line-height:1.8">
+            Unit prices must match agreed PO price.<br>
+            Deviation <span style="color:var(--yellow);font-weight:700">&gt;1.0%</span> must be queried<br>
+            and rejected until corrected invoice received.
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: step timeline -->
+      <div class="ep-steps">
+
+        <div class="step-card">
+          <div class="step-top">
+            <span class="step-num">Step 1 of 3</span>
+            <span class="step-action-badge query">QUERY_VENDOR</span>
+          </div>
+          <div class="step-json"><span class="k">"decision":</span> <span class="v">"QUERY_VENDOR"</span>, <span class="k">"approved_amount":</span> <span class="n">0.00</span>,
+<span class="k">"reason_code":</span> <span class="v">"PENDING_CLARIFICATION"</span>,
+<span class="k">"explanation":</span> <span class="v">"Invoice unit price $385.00 exceeds PO agreed price $350.00 by 10%. Querying vendor to document discrepancy before final decision."</span></div>
+          <div class="step-reveal">
+            <span class="reveal-lbl">[ VENDOR ]</span>
+            <span>Vendor acknowledges pricing error. Corrected invoice at $350.00 will be reissued.</span>
+          </div>
+        </div>
+
+        <div class="step-connector">↓</div>
+
+        <div class="step-card">
+          <div class="step-top">
+            <span class="step-num">Step 2 of 3</span>
+            <span class="step-action-badge escalate">ESCALATE</span>
+          </div>
+          <div class="step-json"><span class="k">"decision":</span> <span class="v">"ESCALATE"</span>, <span class="k">"approved_amount":</span> <span class="n">0.00</span>,
+<span class="k">"reason_code":</span> <span class="v">"MANAGER_REVIEW"</span>,
+<span class="k">"explanation":</span> <span class="v">"Vendor acknowledged the $385.00 error. Escalating to Finance Manager to confirm rejection and request corrected invoice."</span></div>
+          <div class="step-reveal mgr">
+            <span class="reveal-lbl mgr">[ MANAGER ]</span>
+            <span>Finance Manager confirmed: reject original, request reissued invoice at agreed price $350.00.</span>
+          </div>
+        </div>
+
+        <div class="step-connector">↓</div>
+
+        <div class="step-card terminal">
+          <div class="step-top">
+            <span class="step-num">Step 3 — Terminal</span>
+            <span class="step-action-badge terminal-ok">REJECT ✓</span>
+          </div>
+          <div class="step-json"><span class="k">"decision":</span> <span class="v">"REJECT"</span>, <span class="k">"approved_amount":</span> <span class="n">0.00</span>,
+<span class="k">"reason_code":</span> <span class="v">"PRICE_DISCREPANCY"</span>,
+<span class="k">"explanation":</span> <span class="v">"Invoice price $385.00 vs PO agreed $350.00 — 10% deviation exceeds 1.0% threshold. Vendor confirmed error; corrected invoice required per Policy Rule 4."</span></div>
+          <div class="step-score">
+            <div class="step-score-num">0.901</div>
+            <div class="step-score-lbl">Accumulated reward<br><span style="color:var(--green);font-weight:700">Full investigation + correct terminal decision</span><br><span style="color:var(--dimmer);font-size:11px">vs ~0.40 for skipping straight to REJECT</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Reward breakdown -->
+    <div class="reward-section fade-in">
+      <div class="reward-title">Reward Breakdown — Why 0.901</div>
+      <div class="reward-grid">
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Decision accuracy</span><span class="rw-val">1.00</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:100%"></div></div>
+        </div>
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Amount accuracy</span><span class="rw-val">1.00</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:100%"></div></div>
+        </div>
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Reason code</span><span class="rw-val">1.00</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:100%"></div></div>
+        </div>
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Explanation quality</span><span class="rw-val">0.90</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:90%"></div></div>
+        </div>
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Process bonus <span style="color:var(--teal);font-size:10px">(correct intermediate sequence)</span></span><span class="rw-val" style="color:var(--teal)">+0.10</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:10%;background:var(--teal)"></div></div>
+        </div>
+        <div class="rw-row">
+          <div class="rw-label"><span class="rw-name">Shortcut REJECT — no investigation</span><span class="rw-val" style="color:var(--red)">~0.40</span></div>
+          <div class="rw-bar-bg"><div class="rw-bar-fill" style="width:40%;background:var(--red)"></div></div>
+        </div>
+      </div>
+      <div class="reward-formula">
+        <span class="hl">γ<sup>0</sup></span>×0.01 + <span class="hl">γ<sup>1</sup></span>×0.01 + <span class="hl">γ<sup>2</sup></span>×terminal &nbsp;=&nbsp; 0.01 + 0.9×0.01 + 0.81×terminal &nbsp;=&nbsp; <span class="total">0.901</span><br>
+        <span style="font-size:10px;color:var(--dimmer)">The reward teaches the right process — not just the right answer. Same terminal decision without the investigation sequence scores ~0.40.</span>
       </div>
     </div>
 
@@ -489,256 +494,38 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
 
 <script>
 const $=id=>document.getElementById(id);
-const show=id=>$(id).classList.remove('hidden');
-const hide=id=>$(id).classList.add('hidden');
-const fmt$=n=>'$'+parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-let SESSION_ID=null, TASKS=[], FREIGHT_CAP=50;
 
-// ── Scroll effects ────────────────────────────────────────────────────────────
-window.addEventListener('scroll',()=>{
-  $('nav').classList.toggle('scrolled',window.scrollY>50);
-});
-
-const io=new IntersectionObserver(entries=>{
-  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target);}});
-},{threshold:.15});
+// ── Scroll effects ──
+window.addEventListener('scroll',()=>{$('nav').classList.toggle('scrolled',window.scrollY>50);});
+const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target);}});},{threshold:.15});
 document.querySelectorAll('.fade-in').forEach(el=>io.observe(el));
 
-// ── Stats count-up ────────────────────────────────────────────────────────────
+// ── Stats count-up ──
 let statsAnimated=false;
-const statsIO=new IntersectionObserver(entries=>{
-  if(entries[0].isIntersecting&&!statsAnimated){statsAnimated=true;loadStats();}
-},{threshold:.3});
+const statsIO=new IntersectionObserver(entries=>{if(entries[0].isIntersecting&&!statsAnimated){statsAnimated=true;loadStats();}},{threshold:.3});
 statsIO.observe($('stats'));
-
 function countUp(el,target,duration=1200){
-  const isFloat=String(target).includes('.');
-  let start=0,t0=null;
-  function frame(t){
-    if(!t0)t0=t;
-    const p=Math.min((t-t0)/duration,1);
-    const ease=1-Math.pow(1-p,3);
-    const v=start+(target-start)*ease;
-    el.textContent=isFloat?v.toFixed(3):Math.round(v).toLocaleString();
-    if(p<1)requestAnimationFrame(frame);
-  }
+  const isFloat=String(target).includes('.');let start=0,t0=null;
+  function frame(t){if(!t0)t0=t;const p=Math.min((t-t0)/duration,1);const ease=1-Math.pow(1-p,3);const v=start+(target-start)*ease;el.textContent=isFloat?v.toFixed(3):Math.round(v).toLocaleString();if(p<1)requestAnimationFrame(frame);}
   requestAnimationFrame(frame);
 }
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
-async function boot(){
-  checkHealth();
-  loadTasks();
-  setInterval(loadStats,30000);
-}
+// ── Boot ──
+async function boot(){checkHealth();setInterval(loadStats,30000);}
 
 async function checkHealth(){
-  try{
-    const r=await fetch('/health');
-    const d=await r.json();
-    $('health-dot').className='health-dot ok';
-    $('health-text').textContent='Live';
-  }catch{
-    $('health-dot').className='health-dot err';
-    $('health-text').textContent='Offline';
-  }
+  try{await fetch('/health');$('health-dot').className='health-dot ok';$('health-text').textContent='Live';}
+  catch{$('health-dot').className='health-dot err';$('health-text').textContent='Offline';}
 }
 
 async function loadStats(){
   try{
-    const r=await fetch('/stats');
-    const d=await r.json();
+    const d=await(await fetch('/stats')).json();
     const ep=d.completed_episodes||d.total_episodes||0;
     const ms=d.mean_score||0;
     countUp($('stat-episodes'),ep);
-    if(ms>0){
-      $('stat-score').style.cssText='font-size:40px;font-weight:900;letter-spacing:-2px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1';
-      countUp($('stat-score'),ms,1400);
-    }
+    if(ms>0){$('stat-score').style.cssText='font-size:40px;font-weight:900;letter-spacing:-2px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1';countUp($('stat-score'),ms,1400);}
   }catch{}
-}
-
-async function loadTasks(){
-  try{
-    const r=await fetch('/tasks');
-    TASKS=await r.json();
-    buildDropdown();
-    buildChips();
-    onTaskChange();
-  }catch(e){console.error(e);}
-}
-
-function buildDropdown(){
-  const sel=$('task-select'); sel.innerHTML='';
-  const order=['easy','medium','hard','long-horizon','oversight'];
-  const groups={};
-  TASKS.forEach(t=>{const d=t.difficulty||'easy';(groups[d]=groups[d]||[]).push(t);});
-  const labels={easy:'Easy',medium:'Medium',hard:'Hard','long-horizon':'Long-Horizon',oversight:'Oversight'};
-  order.forEach(d=>{
-    if(!groups[d]?.length)return;
-    const g=document.createElement('optgroup'); g.label=labels[d]||d;
-    groups[d].forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=t.name||t.id;g.appendChild(o);});
-    sel.appendChild(g);
-  });
-}
-
-function buildChips(){
-  const wrap=$('task-chips'); wrap.innerHTML='';
-  const colors={easy:'#22c55e',medium:'#eab308',hard:'#ef4444','long-horizon':'#8b5cf6',oversight:'#0ea5e9'};
-  TASKS.slice(0,12).forEach(t=>{
-    const chip=document.createElement('div');
-    chip.className='task-chip'; chip.dataset.id=t.id;
-    const d=(t.difficulty||'easy').replace('-horizon','');
-    chip.innerHTML=`<span class="diff-dot" style="background:${colors[t.difficulty]||'#94a3b8'};"></span>${t.name||t.id}`;
-    chip.onclick=()=>{$('task-select').value=t.id;onTaskChange();newEpisode();};
-    wrap.appendChild(chip);
-  });
-  if(TASKS.length>12){
-    const more=document.createElement('div');
-    more.className='task-chip';more.style.opacity='.5';
-    more.textContent=`+${TASKS.length-12} more`;
-    wrap.appendChild(more);
-  }
-}
-
-function onTaskChange(){
-  const t=TASKS.find(x=>x.id===$('task-select').value);
-  if(!t)return;
-  document.querySelectorAll('.task-chip').forEach(c=>c.classList.toggle('active',c.dataset.id===t.id));
-  const desc=$('task-desc');
-  const txt=[t.notes,t.expected_decision?'Expected: '+t.expected_decision:''].filter(Boolean).join('  ·  ');
-  if(txt){desc.textContent=txt;show('task-desc');}else hide('task-desc');
-}
-
-// ── New Episode ───────────────────────────────────────────────────────────────
-async function newEpisode(){
-  const task_id=$('task-select').value;
-  const seed=parseInt($('seed-input').value)||42;
-  const btn=$('new-ep-btn');
-  btn.disabled=true; $('btn-icon').textContent='⏳';
-  hide('episode-area'); hide('result-card');
-
-  try{
-    const r=await fetch('/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id,seed})});
-    if(!r.ok)throw new Error(await r.text());
-    const data=await r.json();
-    SESSION_ID=data.session_id;
-    renderObs(data.observation);
-    show('episode-area');
-    $('episode-area').scrollIntoView({behavior:'smooth',block:'nearest'});
-  }catch(e){alert('Error: '+e.message);}
-  finally{btn.disabled=false; $('btn-icon').textContent='▶';}
-}
-
-function renderObs(obs){
-  FREIGHT_CAP=obs.freight_cap||50;
-  const inv=obs.invoice||{};
-  const step=obs.step_count||0, max=obs.max_steps||1;
-
-  // Step indicator
-  if(max>1){
-    $('step-num').textContent=step+1; $('step-max').textContent=max;
-    const dots=$('step-dots'); dots.innerHTML='';
-    for(let i=0;i<Math.min(max,12);i++){const d=document.createElement('span');d.className='step-dot'+(i<step?' done':i===step?' active':'');dots.appendChild(d);}
-    show('step-indicator');
-  }else hide('step-indicator');
-
-  // Duplicate alert
-  const paid=obs.paid_invoice_ids||[];
-  if(paid.includes(inv.invoice_id))show('dupe-alert'); else hide('dupe-alert');
-
-  // Context notes
-  const notes=obs.context_notes||[];
-  $('context-notes-wrap').innerHTML=notes.map(n=>`<div class="context-note">📋 &nbsp;${n}</div>`).join('');
-
-  // Invoice
-  const lines=(inv.line_items||[]).map(li=>`<tr><td>${li.description||'Item'}</td><td style="text-align:right">${li.quantity||0}</td><td style="text-align:right">${fmt$(li.unit_price)}</td><td style="text-align:right;font-weight:600">${fmt$((li.quantity||0)*(li.unit_price||0))}</td></tr>`).join('');
-  const fr=parseFloat(inv.freight_charge||0);
-  const frCls=fr>FREIGHT_CAP?'freight-over':fr>FREIGHT_CAP*.9?'freight-warn':'freight-ok';
-  const frNote=fr>FREIGHT_CAP?` <span style="font-size:10px">⚠ over ${fmt$(FREIGHT_CAP)} cap</span>`:'';
-  $('invoice-body').innerHTML=`
-    <div class="inv-header"><div><div class="inv-id">${inv.invoice_id||'—'}</div><div class="inv-vendor">${inv.vendor_name||'Unknown'}</div></div><div class="inv-total">${fmt$(inv.invoice_total)}</div></div>
-    <table class="items"><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead>
-    <tbody>${lines}<tr class="${frCls}"><td colspan="3">Freight${frNote}</td><td style="text-align:right">${fmt$(fr)}</td></tr></tbody></table>`;
-
-  // POs
-  const pos=obs.purchase_orders||[];
-  $('po-body').innerHTML=pos.length?pos.map(p=>{
-    const stat=(p.status||'UNKNOWN').toUpperCase();
-    const badge=`<span class="badge badge-${stat==='OPEN'?'open':'closed'}">${stat}</span>`;
-    const plines=(p.lines||[]).map(l=>`<div style="font-size:11px;color:var(--dim);margin-top:3px;font-family:monospace">${l.description||'Item'}&nbsp;·&nbsp;qty ${l.ordered_quantity}&nbsp;@&nbsp;${fmt$(l.agreed_unit_price)}</div>`).join('');
-    return `<div class="po-row"><div class="po-header"><span class="po-num">${p.po_number||'PO'}</span>${badge}<span class="po-vendor">${p.vendor_name||''}</span></div>${plines}</div>`;
-  }).join(''):'<span style="color:var(--dim);font-size:12px">No purchase orders</span>';
-
-  // GRNs
-  const grns=obs.goods_receipts||[];
-  $('grn-body').innerHTML=grns.length?grns.map(g=>{
-    const gl=(g.lines||[]).map(l=>`<div style="font-size:11px;color:var(--dim);margin-top:3px;font-family:monospace">${l.description||'Item'}&nbsp;·&nbsp;received&nbsp;<strong style="color:var(--teal)">${l.received_quantity}</strong></div>`).join('');
-    return `<div class="grn-row"><div class="grn-id">${g.grn_id||'GRN'}</div>${gl}</div>`;
-  }).join(''):'<span style="color:var(--dim);font-size:12px">No goods receipts</span>';
-
-  // Policy
-  $('policy-box').textContent=obs.company_policy||'';
-  $('policy-box').style.display='none'; $('pol-arrow').textContent='▼';
-
-  // Reset action form
-  const total=parseFloat(inv.invoice_total||0);
-  $('a-amount').value=total.toFixed(2);
-  $('a-explain').value='';
-  hide('result-card');
-  show('action-card');
-}
-
-function togglePolicy(){
-  const box=$('policy-box');
-  const showing=box.style.display==='block';
-  box.style.display=showing?'none':'block';
-  $('pol-arrow').textContent=showing?'▼':'▲';
-}
-
-// ── Submit ────────────────────────────────────────────────────────────────────
-async function submitAction(){
-  if(!SESSION_ID)return;
-  const action={decision:$('a-decision').value,approved_amount:parseFloat($('a-amount').value)||0,reason_code:$('a-reason').value,explanation:$('a-explain').value.trim()||'No explanation.'};
-  $('submit-btn').disabled=true; show('submit-spin');
-  try{
-    const r=await fetch('/step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:SESSION_ID,action})});
-    if(!r.ok)throw new Error(await r.text());
-    const data=await r.json();
-    renderResult(data);
-    if(!data.done&&data.observation)renderObs(data.observation);
-  }catch(e){alert('Error: '+e.message);}
-  finally{$('submit-btn').disabled=false; hide('submit-spin');}
-}
-
-function renderResult(data){
-  const reward=data.reward||{};
-  const score=parseFloat(reward.score||0);
-  const col=score>=0.75?'var(--green)':score>=0.45?'var(--yellow)':'var(--red)';
-
-  $('score-num').textContent=score.toFixed(3);
-  $('score-num').style.color=col;
-  $('score-bar').style.width=(score*100).toFixed(1)+'%';
-  $('score-bar').style.background=col;
-  $('score-verdict').textContent=score>=0.75?'Strong performance — reward signal satisfied':score>=0.45?'Partial credit — check amount and explanation':'Low score — incorrect decision or missing citations';
-
-  const comps=reward.components||{};
-  $('comp-grid').innerHTML=Object.entries(comps).map(([k,v])=>{
-    const val=typeof v==='number'?v.toFixed(3):v;
-    const c=typeof v==='number'?(v>0.01?'var(--green)':v<0?'var(--red)':'var(--dim)'):'var(--text)';
-    return `<div class="comp-item"><div class="comp-name">${k.replace(/_/g,' ')}</div><div class="comp-val" style="color:${c}">${val}</div></div>`;
-  }).join('');
-
-  if(data.done){
-    $('result-banner').innerHTML=`<div class="done-banner">✓ Episode complete &nbsp;·&nbsp; Final score: ${score.toFixed(3)}</div>`;
-    hide('action-card');
-  }else{
-    const s=data.observation?.step_count??'?',m=data.observation?.max_steps??'?';
-    $('result-banner').innerHTML=`<div class="continue-banner">Intermediate action recorded &nbsp;·&nbsp; Continue with step ${(s||0)+1} of ${m}</div>`;
-  }
-  show('result-card');
-  $('result-card').scrollIntoView({behavior:'smooth',block:'nearest'});
-  loadStats();
 }
 
 boot();
