@@ -197,6 +197,7 @@ class Metrics:
     def __init__(self):
         self.step               = 0
         self.reward_history     = []   # (step, mean_reward) — overall
+        self.loss_history       = []   # (step, loss, grad_norm) — from TRL callback
         self.diff_reward_hist   = collections.defaultdict(list)  # diff → [(step, mean)]
         self.format_history     = []   # (step, format_rate) — compliance over time
         self.episode_len_hist   = []   # all episode lengths (for histogram)
@@ -264,6 +265,7 @@ class Metrics:
             'env_errors':     self.env_errors,
             'elapsed_min':    round(elapsed, 1),
             'reward_history': [{'step': s, 'reward': r} for s, r in self.reward_history],
+            'loss_history':   [{'step': s, 'loss': l, 'grad_norm': g} for s, l, g in self.loss_history],
             'decision_counts': dict(self.decision_counts),
             'task_means':     task_means,
         }
@@ -825,6 +827,44 @@ def _save_loss_curve(trainer, run_dir: str):
         print(f'[LOSS CURVE] skipped: {e}')
 
 
+def _save_reward_curve_png(run_dir: str):
+    """Save final reward curve PNG from METRICS for submission evidence."""
+    try:
+        if not METRICS.reward_history:
+            return
+        BG, TEXT, BLUE = '#0d1117', '#e6edf3', '#58a6ff'
+        steps   = [s for s, _ in METRICS.reward_history]
+        rewards = [r for _, r in METRICS.reward_history]
+        fig, ax = plt.subplots(figsize=(10, 4), facecolor=BG)
+        ax.set_facecolor(BG)
+        ax.plot(steps, rewards, color=BLUE, alpha=0.4, linewidth=1, label='Per-step')
+        if len(rewards) >= 10:
+            w  = max(5, len(rewards) // 15)
+            sm = [sum(rewards[max(0,i-w):i+1])/len(rewards[max(0,i-w):i+1]) for i in range(len(rewards))]
+            ax.plot(steps, sm, color=BLUE, linewidth=2.5, label=f'Smooth (w={w})')
+        mean_r = sum(rewards[-20:]) / min(20, len(rewards))
+        ax.axhline(mean_r, color='#f78166', linestyle='--', linewidth=1.2,
+                   label=f'Recent mean: {mean_r:.3f}')
+        ax.set_ylim(0, 1.05)
+        ax.set_xlabel('Training Step', color=TEXT, fontsize=10)
+        ax.set_ylabel('Mean Reward', color=TEXT, fontsize=10)
+        ax.set_title(f'GRPO Reward Curve — {MODEL_NAME.split("/")[-1]} | {NUM_EPOCHS} epochs',
+                     color=TEXT, fontsize=11, fontweight='bold')
+        ax.tick_params(colors=TEXT)
+        for spine in ax.spines.values(): spine.set_color('#30363d')
+        ax.legend(facecolor=BG, labelcolor=TEXT, fontsize=9)
+        fig.text(0.5, 0.01, f'Mean reward over {len(steps)} training steps. '
+                 f'Higher = better decision quality across {len(METRICS.reward_by_task)} tasks.',
+                 ha='center', color='#8b949e', fontsize=7)
+        plt.tight_layout(rect=[0, 0.04, 1, 1])
+        out = os.path.join(run_dir, 'reward_curve.png')
+        plt.savefig(out, dpi=130, bbox_inches='tight', facecolor=BG)
+        plt.close()
+        print(f'[REWARD CURVE] Saved {out}')
+    except Exception as e:
+        print(f'[REWARD CURVE] skipped: {e}')
+
+
 def main():
     # Authenticate with HF Hub if token provided (needed for gated models like Llama-3)
     hf_token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
@@ -948,17 +988,31 @@ def main():
         report_to             = 'none',
         remove_unused_columns = False,
     )
+    # Callback: capture loss + grad_norm into METRICS so live dashboard shows loss curve
+    from transformers import TrainerCallback
+    class _LossCallback(TrainerCallback):
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and 'loss' in logs:
+                METRICS.loss_history.append((
+                    state.global_step,
+                    round(float(logs['loss']), 5),
+                    round(float(logs.get('grad_norm', 0)), 5),
+                ))
+                METRICS._flush_live()
+
     # Two independent reward functions (guide: use multiple, not one combined signal)
     trainer = GRPOTrainer(
         model=model, processing_class=tokenizer,
         reward_funcs=[env_reward_fn, format_reward_fn],
         args=config, train_dataset=dataset,
+        callbacks=[_LossCallback()],
     )
     result = trainer.train()
     print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
 
-    # Save loss curve from TRL trainer log history
+    # Save final loss + reward curve PNGs for submission evidence
     _save_loss_curve(trainer, RUN_DIR)
+    _save_reward_curve_png(RUN_DIR)
 
     METRICS.print_summary()
     METRICS.save_all_metrics_figures(RUN_DIR)
