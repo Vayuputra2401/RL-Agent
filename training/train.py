@@ -202,6 +202,7 @@ class Metrics:
         self.format_history     = []   # (step, format_rate) — compliance over time
         self.episode_len_hist   = []   # all episode lengths (for histogram)
         self.ep_len_by_task     = collections.defaultdict(list)  # task_id → [lengths]
+        self.ep_len_history     = []   # (step, mean_ep_len) — rolling mean per step
         self.decision_history   = []   # [(step, Counter)] for stacked-bar over time
         self.decision_counts    = collections.Counter()
         self.parse_failures     = 0
@@ -246,6 +247,7 @@ class Metrics:
             for tid, ep_len in zip(task_ids, episode_lengths):
                 self.episode_len_hist.append(ep_len)
                 self.ep_len_by_task[tid].append(ep_len)
+            self.ep_len_history.append((self.step, sum(episode_lengths) / len(episode_lengths)))
 
         self.env_errors += errors
         self._flush_live()
@@ -264,10 +266,14 @@ class Metrics:
             'parse_failures': self.parse_failures,
             'env_errors':     self.env_errors,
             'elapsed_min':    round(elapsed, 1),
-            'reward_history': [{'step': s, 'reward': r} for s, r in self.reward_history],
-            'loss_history':   [{'step': s, 'loss': l, 'grad_norm': g} for s, l, g in self.loss_history],
-            'decision_counts': dict(self.decision_counts),
-            'task_means':     task_means,
+            'reward_history':    [{'step': s, 'reward': r} for s, r in self.reward_history],
+            'loss_history':      [{'step': s, 'loss': l, 'grad_norm': g} for s, l, g in self.loss_history],
+            'format_history':    [{'step': s, 'rate': r} for s, r in self.format_history],
+            'diff_reward_hist':  {d: [{'step': s, 'reward': r} for s, r in v]
+                                  for d, v in self.diff_reward_hist.items()},
+            'ep_len_history':    [{'step': s, 'mean_len': l} for s, l in self.ep_len_history],
+            'decision_counts':   dict(self.decision_counts),
+            'task_means':        task_means,
         }
         try:
             with open('/app/metrics_live.json', 'w') as f:
