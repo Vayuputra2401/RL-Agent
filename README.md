@@ -26,6 +26,17 @@ tags:
 
 ---
 
+## Hackathon Theme Coverage
+
+| Theme | Implementation | Bonus Target |
+|---|---|---|
+| **#1 Multi-Agent** | AP Clerk agent + Fleet AI Oversight agent (separate action/obs spaces, `/oversight/*` endpoints) + VendorActor / ManagerActor / ComplianceActor responding dynamically to QUERY_VENDOR / ESCALATE / HOLD | Fleet AI · Halluminate |
+| **#2 Long-Horizon** | 7 tasks with max 10–16 steps requiring sustained multi-step reasoning: dispute resolution, fraud investigation, manager OOO escalation chain, SOX audit trail | Scale AI Labs |
+| **#3.1 Professional World Modeling** | ERP-style documents (Invoice, PO, GRN, paid ledger), dynamic company policy, multi-app actor interactions, randomised per episode | Scaler AI Labs |
+| **#4 Self-Improvement** | Adaptive curriculum (`/curriculum/next_task`) that escalates difficulty based on session history + `HYPOTHETICAL` action for counterfactual self-play exploration during training | Snorkel AI |
+
+---
+
 ## The Problem
 
 Every enterprise processes thousands of vendor invoices per month. Each one requires a human to cross-reference purchase orders, verify delivery receipts, apply company policy, and decide whether to pay — and how much. A wrong approval costs money. A wrong rejection damages a vendor relationship. A missed duplicate is fraud.
@@ -145,7 +156,6 @@ APObservation
 
 ![Run 2 Dashboard at stop](runs/grpo/qwen-2.5-7b-run2-stopped-2026-04-26/dashboard_step235.png)
 
-> Save the dashboard screenshot to `runs/grpo/qwen-2.5-7b-run2-stopped-2026-04-26/dashboard_step235.png`
 
 | Metric | Value |
 |---|---|
@@ -351,9 +361,9 @@ HF Training Space (A10G)            HF Environment Space
    - `env_reward_fn` — calls `/reset` + `/step` on the live environment, returns the grader score (0.01–0.99)
    - `format_reward_fn` — checks JSON validity and enum values (+0.05 / −0.05), independent of task correctness
 
-2. **Dataset** — built at runtime by calling `/reset` for each of 10 tasks × 5 seeds = 50 prompts. No static dataset; every prompt is a fresh synthetically-generated invoice scenario.
+2. **Dataset** — built at runtime by calling `/reset` for each task × seed combination. No static dataset; every prompt is a fresh synthetically-generated invoice scenario. Run 3: 322 prompts (easy×5, medium×8, hard×20, long×20 seeds across 20 tasks).
 
-3. **GRPO loop** — for each prompt, 8 completions are sampled. The two reward functions score them independently. Group-relative advantages drive the policy update. `per_device_train_batch_size = num_generations = 8` (TRL requirement).
+3. **GRPO loop** — for each prompt, 32 completions are sampled. The two reward functions score them independently. Group-relative advantages drive the policy update. `per_device_train_batch_size = num_generations = 32` (TRL requirement).
 
 4. **Reward hacking mitigations** already in the environment:
    - `_explanation_coherence()` penalises keyword dumps (>40% keyword density)

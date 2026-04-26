@@ -746,6 +746,60 @@ def format_reward_fn(completions, **kwargs):
     return results
 
 
+OVERSIGHT_SYSTEM_PROMPT = """You are a Fleet AI Oversight Agent reviewing completed AP Clerk decisions.
+For each episode summary provided, decide: CLEAR, FLAG_FOR_REVIEW, or ESCALATE_TO_AUDIT.
+Output valid JSON only: {"episode_id": "...", "verdict": "CLEAR|FLAG_FOR_REVIEW|ESCALATE_TO_AUDIT", "signal": "specific reason with $ amounts or %", "confidence": 0.0-1.0}
+Your response must start with { and end with } with no other text."""
+
+
+def eval_oversight(model, tokenizer, seed: int = 99) -> float:
+    """Run one oversight session (5 episodes) and return mean reward across all steps."""
+    import torch, json as _json
+    model.eval()
+    try:
+        reset = requests.post(f'{ENV_URL}/oversight/reset',
+                              json={'num_episodes': 5, 'seed': seed}, timeout=20).json()
+        session_id = reset['session_id']
+        summaries  = reset['observation']['episode_summaries']
+        scores = []
+        for ep in summaries:
+            prompt = (
+                f"Episode ID: {ep['episode_id']}\n"
+                f"Vendor: {ep['vendor_name']}  Invoice: {ep['invoice_id']}  "
+                f"Total: ${ep['invoice_total']:.2f}\n"
+                f"Decision: {ep['final_decision']}  Reason: {ep['reason_code']}\n"
+                f"Explanation: {ep['explanation']}\n"
+                f"Known fraud patterns: {reset['observation'].get('known_fraud_patterns', [])}\n"
+                f"Audit budget remaining: {reset['observation']['audit_budget']}"
+            )
+            messages = [{'role': 'system', 'content': OVERSIGHT_SYSTEM_PROMPT},
+                        {'role': 'user',   'content': prompt}]
+            text   = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer(text, return_tensors='pt').to('cuda')
+            with torch.no_grad():
+                out = model.generate(**inputs, max_new_tokens=150, temperature=0.1, do_sample=True)
+            raw = tokenizer.decode(out[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+            try:
+                action = _json.loads(raw.strip())
+                action.setdefault('episode_id', ep['episode_id'])
+                action.setdefault('verdict', 'CLEAR')
+                action.setdefault('signal', 'no signal')
+                action.setdefault('confidence', 0.5)
+            except Exception:
+                action = {'episode_id': ep['episode_id'], 'verdict': 'CLEAR',
+                          'signal': 'parse error', 'confidence': 0.5}
+            resp  = requests.post(f'{ENV_URL}/oversight/step',
+                                  json={'session_id': session_id, 'action': action},
+                                  timeout=20).json()
+            scores.append(float(resp['reward']['score']))
+        mean = sum(scores) / len(scores) if scores else 0.01
+        print(f'    oversight session mean: {mean:.3f}  scores={[round(s,2) for s in scores]}')
+        return mean
+    except Exception as e:
+        print(f'    oversight eval error: {e}')
+        return 0.01
+
+
 # ── Eval helper ────────────────────────────────────────────────────────────────
 
 def eval_task(model, tokenizer, task_id: str, seed: int = 99) -> float:
@@ -936,20 +990,22 @@ def main():
         s = eval_task(model, tokenizer, t)
         baseline[t] = s
         print(f'  {t}: {s:.3f}')
+    baseline['oversight_agent'] = eval_oversight(model, tokenizer, seed=99)
+    print(f'  oversight_agent: {baseline["oversight_agent"]:.3f}')
     print(f'  Mean: {sum(baseline.values())/len(baseline):.3f}')
     model.train()
 
     # Dataset: easy/medium × 5 seeds, hard/long × 10 seeds.
     # Hard/long tasks get more variation to help discover multi-step sequences.
     # Curriculum gating in env_reward_fn still applies — locked tasks redirect to easy.
-    _SEEDS_PER_DIFF = {'easy': 5, 'medium': 5, 'hard': 10, 'long': 10}
+    _SEEDS_PER_DIFF = {'easy': 5, 'medium': 8, 'hard': 20, 'long': 20}
     task_seed_pairs = [
         (tid, s)
         for tid in TRAIN_TASKS
         for s in range(1, _SEEDS_PER_DIFF.get(_TASK_DIFFICULTY.get(tid, 'easy'), 5) + 1)
     ]
     total_prompts = len(task_seed_pairs)
-    print(f'\n[DATASET] Building prompts ({total_prompts} total: easy/medium×5 seeds, hard/long×10 seeds)...')
+    print(f'\n[DATASET] Building prompts ({total_prompts} total: easy×5 medium×8 hard/long×20 seeds)...')
     rows = []
     for task_id, seed in task_seed_pairs:
         try:
@@ -1047,7 +1103,7 @@ def main():
     else:
         print('[SAVE] HF Hub upload skipped: HF_TOKEN not set')
 
-    # Post-training eval (all 10 tasks)
+    # Post-training eval (all tasks + oversight)
     print('\n[POST-EVAL] After training:')
     post = {}
     model.eval()
@@ -1055,10 +1111,12 @@ def main():
         s = eval_task(model, tokenizer, t)
         post[t] = s
         print(f'  {t}: {s:.3f}')
+    post['oversight_agent'] = eval_oversight(model, tokenizer, seed=99)
+    print(f'  oversight_agent: {post["oversight_agent"]:.3f}')
     print(f'  Mean: {sum(post.values())/len(post):.3f}')
 
     print('\n[COMPARE]')
-    for t in EVAL_TASKS:
+    for t in list(EVAL_TASKS) + ['oversight_agent']:
         d = post[t] - baseline[t]
         sym = '+' if d >= 0 else ''
         print(f'  {t:<35} {baseline[t]:.3f} -> {post[t]:.3f}  ({sym}{d:.3f})')
