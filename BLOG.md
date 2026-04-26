@@ -275,6 +275,10 @@ All results save to timestamped folders under `runs/` — re-running never overw
 | Environment UI (interactive demo) | https://pathikreet-ap-clerk-env.hf.space |
 | Environment API + Swagger | https://pathikreet-ap-clerk-env.hf.space/docs |
 | Training Space (Gradio UI) | https://huggingface.co/spaces/Pathikreet/ap-commander-training |
+| Training script | https://github.com/Vayuputra2401/RL-Agent/blob/main/training/train.py |
+| Colab notebook | https://github.com/Vayuputra2401/RL-Agent/blob/main/training/colab_training.ipynb |
+| Training logs (all runs) | https://github.com/Vayuputra2401/RL-Agent/tree/main/runs/grpo |
+| Baseline logs | https://github.com/Vayuputra2401/RL-Agent/tree/main/runs/baselines |
 | GitHub | https://github.com/Vayuputra2401/RL-Agent |
 | Presentation (Canva) | https://canva.link/k7f87ccul4fznaf |
 

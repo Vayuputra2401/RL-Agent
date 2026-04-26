@@ -23,7 +23,11 @@ tags:
 **Team:** Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi  
 **Live environment UI:** https://pathikreet-ap-clerk-env.hf.space  
 **Environment API + Swagger:** https://pathikreet-ap-clerk-env.hf.space/docs  
-**Training Space:** https://huggingface.co/spaces/Pathikreet/ap-commander-training  
+**Training Space (Gradio UI):** https://huggingface.co/spaces/Pathikreet/ap-commander-training  
+**Training script (HF Space):** [`training/train.py`](training/train.py) — runs on the Training Space (A10G)  
+**Colab notebook:** [`training/colab_training.ipynb`](training/colab_training.ipynb) — self-contained GRPO loop, T4-compatible  
+**Training logs:** [`runs/grpo/`](runs/grpo/) — timestamped per run, nothing overwritten  
+**Baseline logs:** [`runs/baselines/`](runs/baselines/) — scripted agent + untrained Llama/Qwen evaluations  
 **Presentation:** https://canva.link/k7f87ccul4fznaf  
 **Technical documentation:** [TECHNICAL.md](TECHNICAL.md) — architecture, reward design, agent interactions, flowchart, API reference
 
