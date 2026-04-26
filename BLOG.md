@@ -295,19 +295,59 @@ These are fixable. Run 3 applies all three fixes.
 
 ![Run 4 full metrics at step 179 — format 93.7%, decision distribution, per-task rewards](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step179.png)
 
-*Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution nearly identical to Run 3 — the learned action vocabulary is stable regardless of generation count. Run 4 is ongoing.*
+*Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution nearly identical to Run 3 — the learned action vocabulary is stable regardless of generation count.*
+
+Run 4 continued. By step 274 the picture had changed significantly.
+
+![Run 4 full dashboard at step 273 — reward curve reaching 0.805 peak, recent mean 0.774](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/dashboard_step273.png)
+
+*Step 273. The reward curve tells a clean story: a steady climb from 0.486 baseline, crossing 0.7 around step 150 and holding above it through step 273. Recent mean 0.774. Loss has stabilised near zero with no signs of collapse. This is what a healthy GRPO run looks like — monotonic improvement, stable loss, no entropy spike.*
+
+![Run 4 detailed metrics at step 274 — format 96.5%, per-task breakdown, 0 env errors in 8,768 calls](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step274.png)
+
+*Step 274: recent mean **0.780**, format rate **96.5%**, 8,768 reward calls across 166 minutes — and **zero environment errors**. The parse failure count (621 total) looks large but represents 7.1% of all calls, falling steadily: early training had noisier outputs, later steps are near-perfect JSON. Format compliance improved from 93.7% at step 179 to 96.5% at step 274 — the model is getting cleaner as it trains.*
+
+**Per-task at step 274 — where G=8 lands after 274 steps:**
+
+| Difficulty | Task | Score |
+|---|---|---|
+| Easy | No Po Found | **0.99** |
+| Easy | Perfect Match | **0.94** |
+| Medium | Price Discrepancy | **0.97** |
+| Medium | Vendor Mismatch | **0.97** |
+| Medium | Credit Memo | 0.67 |
+| Hard | Duplicate Invoice | **0.93** |
+| Hard | Policy Violation | 0.84 |
+| Hard | Fraud Investigation | 0.86 |
+| Hard | Tax Discrepancy | 0.86 |
+| Hard | Multi Vendor Split | 0.88 |
+| Hard | Manager Chain | 0.70 |
+| Hard | Policy Migration | 0.65 |
+| Hard | Audit Trail | 0.57 |
+| Hard | Quantity Shortfall | 0.58 |
+| Hard | Split Delivery | 0.51 |
+| Hard | Partial Po Match | 0.50 |
+| Hard | Manager Preapproval | 0.29 |
+| Hard | Currency Conversion | 0.31 |
+| Long | Invoice Dispute | 0.14 |
+
+15 of 19 tasks above 0.50. Currency Conversion (0.31) and Invoice Dispute (0.14) are the two hard holdouts — both require the model to read a specific numeric value from a policy note (exchange rate, corrected price) and chain it through a multi-step sequence. These are the hardest tasks in the environment by design; the model is still discovering the sequence.
 
 ---
 
 ### What Four Runs Taught Us
 
-**Temperature is the most sensitive hyperparameter in this environment.** 1.1 → 44% format collapse; 0.7 → 94.9% format compliance from step 1. The format reward needs to be strong enough to compete with env reward at the wrong temperature — ±0.05 is insufficient, ±0.15 works.
+**Temperature is the most sensitive hyperparameter in this environment.** 1.1 → 44% format collapse; 0.7 → 96.5% format compliance by step 274. The format reward needs to compete with env reward — ±0.05 is insufficient, ±0.15 works.
 
-**Curriculum gating backfires on diverse task distributions.** When hard tasks are locked, they receive zero gradient signal. The model learns to be good at easy tasks while the skills that matter — multi-step investigative sequences — never train. Removing the gate and training all 20 tasks simultaneously is the right call for this environment.
+**Parse failures fall with training, not just with hyperparameters.** Run 4 had 621 parse failures across 8,768 calls (7.1%), but almost all of them are concentrated in the early steps. Format rate went from 93.7% at step 179 to 96.5% at step 274. The model learns to produce clean JSON as a side effect of learning to reason — format and reasoning improve together.
 
-**Model size matters less than expected.** Qwen2.5-1.5B reaches mean 0.722 at step 113 from a 0.486 baseline. The 7B model reached 0.746 at step 150 from 0.535. The 1.5B is more compute-efficient per step for this task class — the reasoning structure, not parameter count, is the bottleneck.
+**Zero environment errors across 8,768 calls.** The live FastAPI environment served every request without error for 166 minutes of continuous training. This matters for reproducibility: the reward signal is stable, not noisy from infrastructure failures.
 
-**G=16 outperforms G=8 at matched step counts.** Run 3 (G=16) leads Run 4 (G=8) by ~0.06 at comparable steps. Larger groups produce lower-variance advantage estimates — important when reward varies 0.01–0.99 across tasks in the same batch.
+**Curriculum gating backfires on diverse task distributions.** When hard tasks are locked, they receive zero gradient signal. Removing the gate and training all 20 tasks simultaneously from step 1 is the right call here.
+
+**Model size matters less than expected.** Qwen2.5-1.5B at step 274 reaches 0.780 mean from a 0.486 baseline (+0.294). The 7B model reached 0.746 at step 150. The 1.5B is more compute-efficient per step for this task class — reasoning structure is the bottleneck, not parameter count.
+
+**G=16 leads G=8 at early steps; G=8 closes the gap over time.** Run 3 (G=16) led at step 113 (0.722 vs 0.634 at step 160). By step 274, Run 4 (G=8) is at 0.780 — and still climbing. Larger groups give lower-variance advantage estimates early; smaller groups are faster and appear to catch up given enough steps.
 
 ---
 
