@@ -88,10 +88,18 @@ Anti-hacking measures are built into every grader: `_explanation_coherence()` pe
 ## Training Evidence
 
 **Algorithm:** GRPO (Group Relative Policy Optimization, [DeepSeekMath](https://arxiv.org/abs/2402.03300))
-**Model:** Qwen2.5-7B-Instruct, 4-bit NF4, LoRA r=16
+**Models:** Qwen2.5-1.5B-Instruct and Qwen2.5-7B-Instruct, 4-bit NF4, LoRA r=16
 **Framework:** TRL ≥ 0.15 — live environment rewards over HTTP, no static dataset
 
 Two independent reward functions: `env_reward_fn` calls the live environment and returns the grader score (0.01–0.99); `format_reward_fn` checks JSON validity independently (+0.15 / −0.15).
+
+### The Agents
+
+**AP Clerk agent** is the primary decision-maker. Each episode it receives a structured observation — vendor invoice, matched purchase orders, goods receipt notes, and company policy — and must output a structured JSON action: decision type, approved amount, reason code, and a free-text explanation. The explanation is scored for specificity: it must cite actual dollar figures and percentages, not vague language. Multi-step tasks require the clerk to first investigate (QUERY_VENDOR, ESCALATE, HOLD) before reaching a terminal decision — shortcuts are penalised.
+
+**Oversight agent** operates at a higher level of abstraction. It receives a batch of 3–5 completed clerk episodes and must identify which ones contain fraudulent or policy-violating decisions, explaining the specific numeric signal that triggered its suspicion. False positives carry a −0.25 penalty — not clamped to zero — so an oversight agent that flags everything scores worse than one that reasons carefully. This makes scalable oversight a trainable skill with real stakes, not a checkbox.
+
+**Three workplace actors** respond dynamically during clerk investigations: a VendorActor (honest, fraudulent, or confused persona), a ManagerActor (randomised budget authority and risk appetite — may be out-of-office, triggering a VP escalation chain), and a ComplianceActor (responds to HOLD with a SOX / GDPR / Internal Policy verdict). None of them are pre-scripted responses — they're seeded with the episode RNG and generate contextually appropriate replies.
 
 ### Baselines — What the Untrained Models Score
 
@@ -149,19 +157,33 @@ Run 2 was extended to 17 tasks with 160 prompts and stopped early. What went wro
 
 ---
 
-### Run 3 — In Progress (2026-04-26)
+### Run 3 — Qwen2.5-1.5B, G=16 (2026-04-26, ongoing)
 
-Fixes applied: temperature → 0.7, `beta=0.1` (KL penalty to prevent entropy collapse), format reward → ±0.15, curriculum gating disabled — all 24 tasks train from step 1, `NUM_GENERATIONS=16`, 322 training prompts across full difficulty range.
+**Model:** Qwen2.5-1.5B-Instruct · **Generations per prompt:** 16 · **Tasks:** 24 (all difficulties, no curriculum gating) · **Fixes from Run 2:** temperature → 0.7, `beta=0.1`, format reward → ±0.15, 322 training prompts.
 
 ![Run 3 training dashboard at step 112 — reward curve and loss curve, recent mean 0.692](runs/screenshots/training_dashboard_overview_step112.png)
 
-*Step 112 of Run 3. The reward curve shows a consistent upward trend from the 0.535 untrained Qwen baseline toward 0.692 recent mean. Loss is stable and trending toward zero — no entropy collapse this time. Format rate holding above 90% throughout, a direct result of strengthening the format reward to ±0.15 and dropping temperature to 0.7.*
+*Step 112 of Run 3. Reward curve climbing steadily from the 0.535 untrained Qwen baseline — recent mean 0.692. Loss is stable and approaching zero with no entropy collapse, a direct contrast to Run 2's temperature-1.1 implosion. Format compliance holding above 90% throughout.*
 
 ![Run 3 full metrics at step 113 — format compliance 94.9%, decision distribution, per-task mean rewards](runs/screenshots/training_dashboard_metrics_step113.png)
 
-*Step 113 metrics: recent mean reward 0.722, format rate 94.9%, 0 environment errors across 3,616 reward calls in 71 minutes. Decision distribution shows the model using the full action vocabulary — 59% REJECT, 24% QUERY\_VENDOR, 12% ESCALATE — rather than collapsing to a single decision as in Run 2. Per-task breakdown: easy tasks (`no_po_found` 0.99, `vendor_mismatch` 0.73) have converged; hard multi-step tasks (`manager_chain` 0.13, `invoice_dispute` 0.65) are still learning. This is expected — longer investigative sequences require more gradient steps to surface.*
+*Step 113 breakdown: recent mean 0.722, format rate 94.9%, zero environment errors across 3,616 reward calls in 71 minutes. Decision distribution shows the clerk using the full action vocabulary — 59% REJECT, 24% QUERY\_VENDOR, 12% ESCALATE — rather than collapsing to a single output as in Run 2. Easy tasks have converged near ceiling (`no_po_found` 0.99, `vendor_mismatch` 0.73). Hard and long-horizon tasks (`manager_chain` 0.13, `invoice_dispute` 0.65) are still learning — expected, since multi-step investigative sequences require more gradient steps to surface reliably.*
 
-**[PLACEHOLDER: Run 3 before/after results table — replace with final numbers when run completes]**
+---
+
+### Run 4 — Qwen2.5-1.5B, G=8 (2026-04-26, ongoing)
+
+**Model:** Qwen2.5-1.5B-Instruct · **Generations per prompt:** 8 · Same fixes as Run 3. Running in parallel to compare advantage estimation quality: G=16 produces lower-variance GRPO updates at the cost of 2× more environment calls per step; G=8 trains faster per step but with noisier gradients.
+
+![Run 4 training dashboard at step 160 — reward curve and loss curve, recent mean 0.634](runs/screenshots/run4_dashboard_step160.png)
+
+*Step 160 of Run 4. Recent mean 0.634 — lower than Run 3's 0.692 at the same model size, consistent with the noisier advantage estimates from halving the generation count. Loss curve shows the same stable pattern: no collapse, no runaway gradient norm.*
+
+![Run 4 full metrics at step 179 — format compliance 93.7%, decision distribution, per-task mean rewards](runs/screenshots/run4_metrics_step179.png)
+
+*Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution is near-identical to Run 3 — 59% REJECT, 23% QUERY\_VENDOR, 12% ESCALATE — confirming the learned action vocabulary is stable across generation counts. Per-task pattern mirrors Run 3: easy tasks converged first, hard multi-step tasks still climbing. The G=8 vs G=16 comparison will give us a clean read on whether more generations per prompt are worth the extra compute for this environment.*
+
+**[PLACEHOLDER: Run 3 and Run 4 final before/after comparison table — replace when runs complete]**
 
 ---
 
