@@ -17,7 +17,7 @@ tags:
   - oversight
 ---
 
-# AP Commander — Training LLMs for Enterprise Financial Decision-Making
+# AP Commander — Multi-Agent RL Environment for Enterprise Financial Operations
 
 **Hackathon:** Meta PyTorch OpenEnv × Scaler School of Technology Grand Finale  
 **Team:** Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi  
@@ -39,11 +39,11 @@ tags:
 
 ## The Problem
 
-Every enterprise processes thousands of vendor invoices per month. Each one requires a human to cross-reference purchase orders, verify delivery receipts, apply company policy, and decide whether to pay — and how much. A wrong approval costs money. A wrong rejection damages a vendor relationship. A missed duplicate is fraud.
+Every enterprise processes thousands of vendor invoices every month. Each one requires a human to cross-reference purchase orders, verify delivery receipts, apply company policy, and decide whether to pay — and how much. A wrong approval costs money. A wrong rejection damages a vendor relationship. A missed duplicate is fraud.
 
-**LLMs are surprisingly bad at this.** They hallucinate PO numbers, ignore policy caps, approve duplicates, and struggle to chain multi-step workflows (query vendor → escalate to manager → reject). There is no standard RL environment that teaches this skill.
+**LLMs fail at this in specific, measurable ways.** They hallucinate PO numbers, ignore policy caps, approve duplicates, and cannot chain multi-step workflows like *query vendor → get response → escalate to manager → reject*. They treat each step as independent rather than as part of an investigation. There is no RL environment that exposes these failures with a reward signal designed to close the loopholes.
 
-AP Commander fills that gap: a multi-agent reinforcement learning environment that trains an LLM to reason through enterprise Accounts Payable workflows with the precision a CFO would expect.
+AP Commander is that environment: a multi-agent system that trains an LLM to reason through enterprise Accounts Payable workflows with the rigor a CFO would require, and deploys a second agent to monitor and catch what the first one misses.
 
 ---
 
@@ -59,10 +59,10 @@ It must also justify its decision with specific dollar amounts and a reason code
 
 A second **Oversight agent (Fleet AI)** monitors batches of completed clerk decisions, identifies fraudulent approvals, and explains its reasoning with numeric evidence. It is penalized for false positives.
 
-Three simulated workplace actors respond dynamically to the clerk's actions:
-- **VendorActor** — responds to `QUERY_VENDOR` with one of three personas: honest, fraudulent, or confused
-- **ManagerActor** — responds to `ESCALATE` based on its budget authority and risk appetite; may be out-of-office, triggering a VP chain
-- **ComplianceActor** — responds to `HOLD` with a SOX / GDPR / Internal Policy verdict
+Three simulated workplace actors generate contextual responses at episode start, revealed progressively as the clerk takes intermediate actions:
+- **VendorActor** — reveals response to `QUERY_VENDOR` with one of three personas: honest, fraudulent, or confused
+- **ManagerActor** — reveals response to `ESCALATE` based on its budget authority and risk appetite; may be out-of-office, triggering a VP chain
+- **ComplianceActor** — reveals response to `HOLD` with a SOX / GDPR / Internal Policy verdict
 
 Episodes run up to **16 steps** on long-horizon tasks — fraud investigations, audit trails, multi-vendor splits — requiring sustained multi-step reasoning to reach the correct terminal decision.
 
@@ -125,7 +125,6 @@ APObservation
 
 ![Live reward curve and stats](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/training_dashboard_step150.png)
 ![Decision distribution and per-task rewards](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/training_decision_dist.png)
-![Loss and gradient norm curve](runs/grpo/qwen-2.5-7b-3ep-2026-04-25/loss_curve.png)
 
 > **Recent mean reward 0.746** at step 150. Single-step REJECT tasks learned quickly (Price Discrepancy 0.96, Vendor Mismatch 0.94, Tax Discrepancy 0.92). Multi-step tasks still failing (Duplicate Invoice 0.07, Policy Violation 0.09) — correct action sequences (QUERY_VENDOR → REJECT, ESCALATE → REJECT) require more epochs to discover.
 
@@ -191,12 +190,13 @@ APObservation
 
 #### Run 3 fixes applied
 - Temperature: 1.1 → **0.7**
-- `kl_coeff=0.1` added (prevents entropy collapse)
+- `beta=0.1` added (prevents entropy collapse; was `kl_coeff` which is not a valid TRL param)
 - Format reward: ±0.05 → **±0.15**
 - Curriculum gating **disabled** — all 20 tasks train from step 1
-- `NUM_GENERATIONS`: 16 → **32**
+- `NUM_GENERATIONS`: **16** (32 caused CUDA OOM on 7B/A10G during backward pass)
 - `gradient_accumulation_steps`: 2 → **1**
-- 3 missing hard tasks added: `hard_currency`, `hard_manager_preapproval`, `hard_credit_memo`
+- `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce fragmentation
+- 3 missing hard tasks registered: `hard_currency_conversion`, `hard_manager_preapproval`, `hard_credit_memo` → restores 322 training prompts
 - System prompt updated with concrete JSON example
 
 ---
@@ -256,15 +256,15 @@ Run `training/eval_baseline.py` on the HF Training Space to generate this. Resul
 
 ## Why It Matters
 
-Enterprise AP automation is a $10B+ market. Current LLM deployments in this space fail silently — a model that confidently approves a duplicate invoice looks the same as one that correctly rejects it, until the reconciliation audit.
+Enterprise AP automation is a $10B+ market. Current LLM deployments fail silently — a model that confidently approves a duplicate invoice looks identical to one that correctly rejects it, until the reconciliation audit three months later.
 
-AP Commander trains the behaviors that matter:
-- **3-way matching**: Invoice ↔ PO ↔ GRN with amount tolerance
-- **Policy compliance**: Freight caps, approval authority limits, tax handling
-- **Multi-step investigation**: Query → Escalate → Decide, not just one-shot answers
-- **Scalable oversight**: A second agent that monitors the first and catches what it misses
+The reward signal in AP Commander is specifically engineered to close the shortcuts an untrained model exploits:
+- **3-way matching**: Invoice ↔ PO ↔ GRN — amounts, quantities, vendor names must all align
+- **Policy compliance**: Freight caps, approval authority limits, and tax rates change per episode; the agent must read policy, not memorise it
+- **Multi-step investigation**: `QUERY_VENDOR → ESCALATE → REJECT` is rewarded; skipping to `REJECT` without the investigation is not
+- **Scalable oversight**: A second agent monitors completed clerk decisions, flags fraud with numeric evidence, and is penalised for false positives — making oversight trainable, not just bolted on
 
-The reward signal is designed so an agent cannot score well by guessing. It must cite specific amounts, choose correct reason codes, and follow the right investigative sequence. There is no shortcut.
+An agent cannot score well by guessing. It must cite specific dollar amounts, choose the correct reason code, and follow the right sequence. There is no shortcut.
 
 ---
 
@@ -363,7 +363,7 @@ HF Training Space (A10G)            HF Environment Space
 
 2. **Dataset** — built at runtime by calling `/reset` for each task × seed combination. No static dataset; every prompt is a fresh synthetically-generated invoice scenario. Run 3: 322 prompts (easy×5, medium×8, hard×20, long×20 seeds across 20 tasks).
 
-3. **GRPO loop** — for each prompt, 32 completions are sampled. The two reward functions score them independently. Group-relative advantages drive the policy update. `per_device_train_batch_size = num_generations = 32` (TRL requirement).
+3. **GRPO loop** — for each prompt, 16 completions are sampled. The two reward functions score them independently. Group-relative advantages drive the policy update. `per_device_train_batch_size = num_generations = 16` (TRL requirement).
 
 4. **Reward hacking mitigations** already in the environment:
    - `_explanation_coherence()` penalises keyword dumps (>40% keyword density)

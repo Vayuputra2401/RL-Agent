@@ -4,6 +4,12 @@ Tracks: overall reward, per-component rewards, decision distribution,
         format compliance, env errors, sample generations, reward curve.
 """
 import os, json, re, random, time, datetime, collections
+
+# Reduce CUDA memory fragmentation — must be set before torch is imported
+os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
+
+class _StopTraining(Exception):
+    """Raised inside reward fn when /app/stop_requested flag is found."""
 import requests
 import matplotlib
 matplotlib.use('Agg')
@@ -13,7 +19,7 @@ import numpy as np
 ENV_URL         = 'https://pathikreet-ap-clerk-env.hf.space'
 MODEL_NAME      = os.environ.get('MODEL_NAME', 'Qwen/Qwen2.5-7B-Instruct')
 NUM_EPOCHS      = int(os.environ.get('NUM_EPOCHS', '6'))
-NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '32'))
+NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '16'))  # 32 OOMs on 7B/A10G; 16 fits (~16 GB est.)
 LOG_SAMPLES_EVERY = 20   # print a sample generation every N reward calls
 
 SYSTEM_PROMPT = """You are an AI Accounts Payable Clerk. Review the invoice, PO, and GRN, then output ONLY a single valid JSON object. No prose, no markdown, no explanation outside the JSON.
@@ -32,7 +38,7 @@ TRAIN_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
-    'hard_currency', 'hard_manager_preapproval', 'hard_credit_memo',
+    'hard_currency_conversion', 'hard_manager_preapproval', 'hard_credit_memo',
     'long_invoice_dispute', 'long_policy_migration',
     'long_batch_reconciliation', 'long_manager_chain',
     'long_fraud_investigation', 'long_audit_trail',
@@ -44,7 +50,7 @@ EVAL_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
-    'hard_currency', 'hard_manager_preapproval', 'hard_credit_memo',
+    'hard_currency_conversion', 'hard_manager_preapproval', 'hard_credit_memo',
     'long_invoice_dispute', 'long_policy_migration',
     'long_batch_reconciliation', 'long_manager_chain',
     'long_fraud_investigation', 'long_audit_trail',
@@ -63,6 +69,8 @@ _TASK_DIFFICULTY = {
     'medium_split_delivery': 'medium',    'medium_vendor_mismatch': 'medium',
     'hard_policy_violation': 'hard',      'hard_duplicate_invoice': 'hard',
     'hard_partial_po_match': 'hard',      'hard_tax_discrepancy': 'hard',
+    'hard_currency_conversion': 'hard',   'hard_manager_preapproval': 'hard',
+    'hard_credit_memo': 'hard',
     'long_invoice_dispute': 'long',       'long_policy_migration': 'long',
     'long_batch_reconciliation': 'long',  'long_manager_chain': 'long',
     'long_fraud_investigation': 'long',   'long_audit_trail': 'long',
@@ -733,6 +741,13 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
     if METRICS.step % 5 == 0:
         METRICS.print_summary()
         print(f'[CURRICULUM] {CURRICULUM.status_line()}')
+
+    # Graceful stop: app.py writes this flag when Stop button is clicked
+    if os.path.exists('/app/stop_requested'):
+        print(f'\n[STOP] Stop flag detected at step {METRICS.step}. Saving weights before exit...')
+        os.remove('/app/stop_requested')
+        raise _StopTraining()
+
     return rewards
 
 
@@ -1040,9 +1055,9 @@ def main():
         num_generations       = NUM_GENERATIONS,
         gradient_accumulation_steps = 1,
         learning_rate         = 1e-5,
-        max_completion_length = 300,
+        max_completion_length = 200,
         temperature           = 0.7,
-        kl_coeff              = 0.1,
+        beta                  = 0.1,
         bf16                  = _use_bf16,
         fp16                  = _use_fp16,
         logging_steps         = 1,
@@ -1069,35 +1084,43 @@ def main():
         args=config, train_dataset=dataset,
         callbacks=[_LossCallback()],
     )
-    result = trainer.train()
-    print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
+    stopped_early = False
+    try:
+        result = trainer.train()
+        print(f'\n[TRAIN] Done. Loss: {result.training_loss:.4f}')
+    except _StopTraining:
+        stopped_early = True
+        print(f'\n[STOP] Early stop at step {METRICS.step}. Saving weights now...')
 
-    # Save final loss + reward curve PNGs for submission evidence
+    # Save curves and metrics figures
     _save_loss_curve(trainer, RUN_DIR)
     _save_reward_curve_png(RUN_DIR)
-
     METRICS.print_summary()
     METRICS.save_all_metrics_figures(RUN_DIR)
 
     # Save LoRA adapters (guide point 16: save adapters directly, do NOT merge 4-bit naively)
     adapter_dir = os.path.join(RUN_DIR, 'adapter')
-    print(f'[SAVE] Saving LoRA adapters to {adapter_dir}...')
+    label = 'early-stop' if stopped_early else 'final'
+    print(f'[SAVE] Saving LoRA adapters ({label}) to {adapter_dir}...')
     model.save_pretrained(adapter_dir)
     tokenizer.save_pretrained(adapter_dir)
 
-    # Upload adapter to HF Hub as a model repo
+    # Upload adapter to HF Hub — repo is {username}/ap-commander-adapter, auto-detected from token
     hf_token_save = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
     if hf_token_save:
         try:
             from huggingface_hub import HfApi
             api = HfApi(token=hf_token_save)
+            username = api.whoami(token=hf_token_save)['name']
+            adapter_repo = f'{username}/ap-commander-adapter'
+            api.create_repo(repo_id=adapter_repo, repo_type='model', exist_ok=True, token=hf_token_save)
             api.upload_folder(
                 folder_path=adapter_dir,
-                repo_id='Pathikreet/ap-commander-adapter',
+                repo_id=adapter_repo,
                 repo_type='model',
                 commit_message=f'GRPO {datetime.datetime.now().strftime("%Y-%m-%d")} — {MODEL_NAME} {NUM_EPOCHS}ep',
             )
-            print('[SAVE] Adapter pushed to HF Hub: Pathikreet/ap-commander-adapter')
+            print(f'[SAVE] Adapter pushed to HF Hub: {adapter_repo}')
         except Exception as e:
             print(f'[SAVE] HF Hub upload skipped: {e}')
     else:
@@ -1276,15 +1299,17 @@ def main():
         try:
             from huggingface_hub import HfApi
             api = HfApi(token=hf_token_up)
+            username = api.whoami(token=hf_token_up)['name']
+            training_repo = f'{username}/ap-commander-training'
             api.upload_folder(
                 folder_path=RUN_DIR,
                 path_in_repo=repo_run_path,
-                repo_id='Pathikreet/ap-commander-training',
+                repo_id=training_repo,
                 repo_type='space',
                 commit_message=f'Run artifacts: {os.path.basename(RUN_DIR)}',
-                ignore_patterns=['adapter/*'],  # adapter uploaded separately to model repo
+                ignore_patterns=['adapter/*'],
             )
-            print(f'[UPLOAD] Run folder → {repo_run_path} in Pathikreet/ap-commander-training')
+            print(f'[UPLOAD] Run folder → {repo_run_path} in {training_repo}')
         except Exception as e:
             print(f'[UPLOAD] artifact upload failed: {e}')
     else:
