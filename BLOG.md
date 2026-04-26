@@ -214,13 +214,15 @@ Before any fine-tuning, we ran three baselines: a hardcoded scripted agent (the 
 
 *Qwen2.5-7B before GRPO: 0.535 overall mean. Hard tasks score 0.468, long-horizon tasks 0.432 — near the floor. Without training, the model cannot discover action sequences like `QUERY_VENDOR → REJECT`. That's what GRPO teaches.*
 
-| Task Category | Optimal Ceiling | Untrained Llama-3-8B | Untrained Qwen2.5-7B | After GRPO (Run 1) |
+| Task Category | Optimal Ceiling | Untrained Llama-3-8B | Untrained Qwen2.5-7B | After GRPO (Run 1)† |
 |---|---|---|---|---|
 | Easy | 0.990 | 0.990 | 0.721 | **0.990** |
 | Medium | 0.907 | 0.712 | 0.691 | **0.860** |
 | Hard | 0.843 | 0.698 | 0.468 | — |
 | Long-horizon | 0.989 | 0.832 | 0.432 | — |
 | **Overall** | **0.921** | **0.811** | **0.535** | — |
+
+*† Run 1 trained on easy and medium tasks only for 3 epochs — hard and long-horizon tasks were not in the training distribution. Runs 3 and 4 cover all 20 tasks.*
 
 ---
 
@@ -406,4 +408,4 @@ All results save to timestamped folders under `runs/` — re-running never overw
 
 ---
 
-The environment is live, every run is timestamped in `runs/`, and nothing has been overwritten or cherry-picked. The training evidence is there if anyone wants to dig into it.
+The model started at 0.486 — unable to query a vendor before rejecting, unable to trace a duplicate chain, defaulting to one-shot decisions on tasks that require investigation. Four runs later it sits at 0.780 and is still climbing. The reward signal is working.
