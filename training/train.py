@@ -13,14 +13,18 @@ import numpy as np
 ENV_URL         = 'https://pathikreet-ap-clerk-env.hf.space'
 MODEL_NAME      = os.environ.get('MODEL_NAME', 'Qwen/Qwen2.5-7B-Instruct')
 NUM_EPOCHS      = int(os.environ.get('NUM_EPOCHS', '6'))
-NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '16'))
+NUM_GENERATIONS = int(os.environ.get('NUM_GENERATIONS', '32'))
 LOG_SAMPLES_EVERY = 20   # print a sample generation every N reward calls
 
-SYSTEM_PROMPT = """You are an AI Accounts Payable Clerk. Review the invoice, PO, and GRN, then output ONLY valid JSON:
-{"decision": "APPROVE_FULL"|"APPROVE_PARTIAL"|"REJECT"|"ESCALATE"|"QUERY_VENDOR",
- "approved_amount": <float>,
- "reason_code": "MATCH_CONFIRMED"|"QUANTITY_MISMATCH"|"PRICE_DISCREPANCY"|"POLICY_VIOLATION"|"NO_PO_FOUND"|"DUPLICATE_INVOICE"|"VENDOR_MISMATCH"|"TAX_DISCREPANCY"|"PENDING_CLARIFICATION"|"MANAGER_REVIEW",
- "explanation": "<cite specific $ amounts>"}"""
+SYSTEM_PROMPT = """You are an AI Accounts Payable Clerk. Review the invoice, PO, and GRN, then output ONLY a single valid JSON object. No prose, no markdown, no explanation outside the JSON.
+
+Valid decisions: APPROVE_FULL | APPROVE_PARTIAL | REJECT | ESCALATE | QUERY_VENDOR
+Valid reason codes: MATCH_CONFIRMED | QUANTITY_MISMATCH | PRICE_DISCREPANCY | POLICY_VIOLATION | NO_PO_FOUND | DUPLICATE_INVOICE | VENDOR_MISMATCH | TAX_DISCREPANCY | PENDING_CLARIFICATION | MANAGER_REVIEW
+
+Example (do not copy — generate your own based on the actual invoice):
+{"decision": "REJECT", "approved_amount": 0.0, "reason_code": "NO_PO_FOUND", "explanation": "Invoice INV-2024-5821 rejected: no open PO found for vendor TechCorp. Policy Rule 5 mandates a valid OPEN PO before payment."}
+
+Your response must start with { and end with } with no other text."""
 
 TRAIN_TASKS = [
     'easy_perfect_match', 'easy_no_po_found',
@@ -28,6 +32,7 @@ TRAIN_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
+    'hard_currency', 'hard_manager_preapproval', 'hard_credit_memo',
     'long_invoice_dispute', 'long_policy_migration',
     'long_batch_reconciliation', 'long_manager_chain',
     'long_fraud_investigation', 'long_audit_trail',
@@ -39,6 +44,7 @@ EVAL_TASKS = [
     'medium_split_delivery', 'medium_vendor_mismatch',
     'hard_policy_violation', 'hard_duplicate_invoice',
     'hard_partial_po_match', 'hard_tax_discrepancy',
+    'hard_currency', 'hard_manager_preapproval', 'hard_credit_memo',
     'long_invoice_dispute', 'long_policy_migration',
     'long_batch_reconciliation', 'long_manager_chain',
     'long_fraud_investigation', 'long_audit_trail',
@@ -664,15 +670,13 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
 
     rewards, decisions, format_ok_list, ep_lengths, errors = [], [], [], [], 0
     for completion, tid, s in zip(completions, task_ids, seeds):
-        gated_tid = CURRICULUM.gate_task(tid)
-        if gated_tid != tid:
-            print(f'[CURRICULUM] gate {tid} → {gated_tid}')
-
+        # Curriculum gating disabled: all 20 tasks train simultaneously from step 1.
+        # Gating caused mode collapse in Run 2 — hard tasks never trained.
         action, fmt_ok = parse_action(completion)
         episode_steps = []
         try:
             score, ep_len = run_episode_accumulated(
-                gated_tid, action, seed=int(s), episode_log=episode_steps)
+                tid, action, seed=int(s), episode_log=episode_steps)
         except Exception as e:
             score, ep_len = 0.01, 1
             errors += 1
@@ -681,7 +685,7 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
         ep_lengths.append(ep_len)
         decisions.append(action.get('decision', 'UNKNOWN'))
         format_ok_list.append(fmt_ok)
-        CURRICULUM.record(gated_tid, score)
+        CURRICULUM.record(tid, score)
 
         # Write structured episode record to JSONL for full verifiability
         if _EPISODE_LOG_PATH:
@@ -690,7 +694,6 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
                     'reward_step':   METRICS.step + 1,
                     'call_n':        METRICS.total_calls + len(rewards),
                     'task_id':       tid,
-                    'gated_task_id': gated_tid,
                     'seed':          int(s),
                     'format_ok':     fmt_ok,
                     'score':         round(score, 4),
@@ -705,8 +708,7 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
                 pass
 
         if METRICS.total_calls % LOG_SAMPLES_EVERY == 0:
-            gated_note = f'→{gated_tid}' if gated_tid != tid else ''
-            print(f'\n[SAMPLE] task={tid}{gated_note} seed={s} fmt={fmt_ok} '
+            print(f'\n[SAMPLE] task={tid} seed={s} fmt={fmt_ok} '
                   f'score={score:.3f} ep_len={ep_len}')
             print(f'  {action.get("decision")} ${action.get("approved_amount")} '
                   f'{action.get("reason_code")}')
@@ -727,11 +729,12 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
 
 
 def format_reward_fn(completions, **kwargs):
-    """Format reward: +0.05 if valid JSON with correct fields, -0.05 otherwise."""
+    """Format reward: +0.15 if valid JSON with correct fields, -0.15 otherwise.
+    Increased from ±0.05 — format failures were 55% in Run 2, drowning env signal."""
     results = []
     for completion in completions:
         _, ok = parse_action(completion)
-        results.append(0.05 if ok else -0.05)
+        results.append(0.15 if ok else -0.15)
     return results
 
 
@@ -883,10 +886,11 @@ def main():
         num_train_epochs      = NUM_EPOCHS,
         per_device_train_batch_size = NUM_GENERATIONS,
         num_generations       = NUM_GENERATIONS,
-        gradient_accumulation_steps = 2,
+        gradient_accumulation_steps = 1,
         learning_rate         = 1e-5,
         max_completion_length = 300,
-        temperature           = 1.1,
+        temperature           = 0.7,
+        kl_coeff              = 0.1,
         bf16                  = _use_bf16,
         fp16                  = _use_fp16,
         logging_steps         = 1,

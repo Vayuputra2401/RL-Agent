@@ -138,6 +138,58 @@ APObservation
 
 ---
 
+### Run 2 — Qwen2.5-7B, 17 tasks, 160 prompts (stopped early at step 235/420)
+
+**Hardware:** A10G Large | **Stopped:** Epoch 3.35 / 6
+
+![Run 2 Dashboard at stop](runs/grpo/qwen-2.5-7b-run2-stopped-2026-04-26/dashboard_step235.png)
+
+> Save the dashboard screenshot to `runs/grpo/qwen-2.5-7b-run2-stopped-2026-04-26/dashboard_step235.png`
+
+| Metric | Value |
+|---|---|
+| Steps completed | 235 / 420 |
+| Recent mean reward | 0.516 |
+| Format rate | **44.4%** (critical failure) |
+| Parse failures | 8 343 / 7 520 reward calls |
+| Elapsed | 255.6 min |
+
+#### Per-task means at stop
+
+| Task | Score | Task | Score |
+|---|---|---|---|
+| easy_no_po_found | **0.99** | hard_policy_violation | 0.45 |
+| easy_perfect_match | **0.82** | medium_price_discrepancy | 0.45 |
+| medium_vendor_mismatch | 0.55 | long_policy_migration | 0.42 |
+| hard_tax_discrepancy | 0.50 | long_manager_chain | 0.38 |
+| long_fraud_investigation | 0.49 | long_audit_trail | 0.34 |
+| hard_duplicate_invoice | 0.48 | medium_quantity_shortfall | 0.33 |
+| | | long_invoice_dispute | 0.33 |
+| | | long_batch_reconciliation | 0.28 |
+| | | long_split_delivery | 0.24 |
+| | | long_multi_vendor_split | 0.22 |
+| | | hard_partial_po_match | 0.22 |
+
+#### Issues that caused early stop
+
+1. **Temperature 1.1 → 55% format failures** — model generated natural language instead of JSON; format reward ±0.05 too weak to correct this
+2. **Curriculum gating locked hard tasks** — from epoch 3 onward `hard_policy_violation` and other hard tasks were silently redirected to easy tasks; hard/long tasks stopped receiving any gradient signal
+3. **Entropy collapsed to 0.23** — model defaulted to REJECT for 59% of decisions; APPROVE_PARTIAL and QUERY_VENDOR nearly absent
+4. **frac_reward_zero_std = 0.5** — half of all GRPO groups had identical rewards across 16 generations; zero learning signal for those steps
+5. **Negative loss (-0.011) with zero clip_ratio** — policy drifted past reference without PPO correction
+
+#### Run 3 fixes applied
+- Temperature: 1.1 → **0.7**
+- `kl_coeff=0.1` added (prevents entropy collapse)
+- Format reward: ±0.05 → **±0.15**
+- Curriculum gating **disabled** — all 20 tasks train from step 1
+- `NUM_GENERATIONS`: 16 → **32**
+- `gradient_accumulation_steps`: 2 → **1**
+- 3 missing hard tasks added: `hard_currency`, `hard_manager_preapproval`, `hard_credit_memo`
+- System prompt updated with concrete JSON example
+
+---
+
 ### Baselines
 
 #### Untrained Qwen2.5-7B-Instruct (4-bit, no LoRA)
