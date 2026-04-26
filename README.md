@@ -28,7 +28,8 @@ tags:
 **Colab notebook:** [`training/colab_training.ipynb`](training/colab_training.ipynb) — self-contained GRPO loop, T4-compatible  
 **Training logs:** [`runs/grpo/`](runs/grpo/) — timestamped per run, nothing overwritten  
 **Baseline logs:** [`runs/baselines/`](runs/baselines/) — scripted agent + untrained Llama/Qwen evaluations  
-**Presentation:** https://canva.link/k7f87ccul4fznaf  
+**Blog / Writeup:** [BLOG.md](BLOG.md) — full writeup: problem, environment, training evidence across 4 runs, reward design  
+**Presentation (slide deck):** https://canva.link/k7f87ccul4fznaf  
 **Technical documentation:** [TECHNICAL.md](TECHNICAL.md) — architecture, reward design, agent interactions, flowchart, API reference
 
 ![AP Commander — interactive environment website](runs/screenshots/env_ui_hero.png)
