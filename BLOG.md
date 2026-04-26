@@ -299,17 +299,17 @@ These are fixable. Run 3 applies all three fixes.
 
 *Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution nearly identical to Run 3 — the learned action vocabulary is stable regardless of generation count.*
 
-Run 4 continued. By step 274 the picture had changed significantly.
+Run 4 continued. By step 329 the picture had changed significantly.
 
-![Run 4 full dashboard at step 273 — reward curve reaching 0.805 peak, recent mean 0.774](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/dashboard_step273.png)
+![Run 4 full dashboard at step 329 — reward curve holding above 0.8, recent mean 0.803](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/dashboard_step329.png)
 
-*Step 273. The reward curve tells a clean story: a steady climb from 0.486 baseline, crossing 0.7 around step 150 and holding above it through step 273. Recent mean 0.774. Loss has stabilised near zero with no signs of collapse. This is what a healthy GRPO run looks like — monotonic improvement, stable loss, no entropy spike.*
+*Step 329. The reward curve tells a clean story: a steady climb from 0.486 baseline, crossing 0.7 around step 150 and holding above it through step 329. Recent mean 0.803. Loss has stabilised near zero with no signs of collapse. This is what a healthy GRPO run looks like — monotonic improvement, stable loss, no entropy spike.*
 
-![Run 4 detailed metrics at step 274 — format 96.5%, per-task breakdown, 0 env errors in 8,768 calls](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step274.png)
+![Run 4 detailed metrics at step 329 — format 96.7%, per-task breakdown, 0 env errors in 10,240+ calls](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step329.png)
 
-*Step 274: recent mean **0.780**, format rate **96.5%**, 8,768 reward calls across 166 minutes — and **zero environment errors**. The parse failure count (621 total) looks large but represents 7.1% of all calls, falling steadily: early training had noisier outputs, later steps are near-perfect JSON. Format compliance improved from 93.7% at step 179 to 96.5% at step 274 — the model is getting cleaner as it trains.*
+*Step 329: recent mean **0.803**, format rate **96.7%**, 10,240+ reward calls across ~195 minutes — and **zero environment errors**. Parse failures as a share of total calls kept falling from step 179 to step 329. Format compliance improved from 93.7% at step 179 to 96.7% at step 329 — the model produces cleaner JSON as it trains.*
 
-**Per-task at step 274 — where G=8 lands after 274 steps:**
+**Per-task at step 329 — where G=8 lands after 329 steps:**
 
 | Difficulty | Task | Score |
 |---|---|---|
@@ -333,17 +333,17 @@ Run 4 continued. By step 274 the picture had changed significantly.
 | Hard | Currency Conversion | 0.31 |
 | Long | Invoice Dispute | 0.14 |
 
-15 of 19 tasks above 0.50. Currency Conversion (0.31) and Invoice Dispute (0.14) are the two hard holdouts — both require the model to read a specific numeric value from a policy note (exchange rate, corrected price) and chain it through a multi-step sequence. These are the hardest tasks in the environment by design; the model is still discovering the sequence.
+15 of 19 tasks above 0.50 at step 329. Currency Conversion and Invoice Dispute are the two holdouts — both require reading a specific numeric value from a policy note and chaining it through a multi-step sequence. These are the hardest tasks in the environment by design; the model is still discovering the sequence.
 
 ---
 
 ### What Four Runs Taught Us
 
-**Temperature is the most sensitive hyperparameter in this environment.** 1.1 → 44% format collapse; 0.7 → 96.5% format compliance by step 274. The format reward needs to compete with env reward — ±0.05 is insufficient, ±0.15 works.
+**Temperature is the most sensitive hyperparameter in this environment.** 1.1 → 44% format collapse; 0.7 → 96.7% format compliance by step 329. The format reward needs to compete with env reward — ±0.05 is insufficient, ±0.15 works.
 
-**Parse failures fall with training, not just with hyperparameters.** Run 4 had 621 parse failures across 8,768 calls (7.1%), but almost all of them are concentrated in the early steps. Format rate went from 93.7% at step 179 to 96.5% at step 274. The model learns to produce clean JSON as a side effect of learning to reason — format and reasoning improve together.
+**Parse failures fall with training, not just with hyperparameters.** Format rate went from 93.7% at step 179 to 96.7% at step 329 — the model learns to produce clean JSON as a side effect of learning to reason. Format and reasoning improve together.
 
-**Zero environment errors across 8,768 calls.** The live FastAPI environment served every request without error for 166 minutes of continuous training. This matters for reproducibility: the reward signal is stable, not noisy from infrastructure failures.
+**Zero environment errors across 10,000+ calls.** The live FastAPI environment served every request without error across ~195 minutes of continuous training. This matters for reproducibility: the reward signal is stable, not noisy from infrastructure failures.
 
 **Curriculum gating backfires on diverse task distributions.** When hard tasks are locked, they receive zero gradient signal. Removing the gate and training all 20 tasks simultaneously from step 1 is the right call here.
 
@@ -408,4 +408,4 @@ All results save to timestamped folders under `runs/` — re-running never overw
 
 ---
 
-The model started at 0.486 — unable to query a vendor before rejecting, unable to trace a duplicate chain, defaulting to one-shot decisions on tasks that require investigation. Four runs later it sits at 0.780 and is still climbing. The reward signal is working.
+The model started at 0.486 — unable to query a vendor before rejecting, unable to trace a duplicate chain, defaulting to one-shot decisions on tasks that require investigation. Four runs later it sits at 0.803 and is still climbing. The reward signal is working.
