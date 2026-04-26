@@ -26,6 +26,8 @@ tags:
 **Presentation:** https://canva.link/k7f87ccul4fznaf  
 **Technical documentation:** [TECHNICAL.md](TECHNICAL.md) — architecture, reward design, agent interactions, flowchart, API reference
 
+![AP Commander — interactive environment website](runs/screenshots/env_ui_hero.png)
+
 ---
 
 ## Hackathon Theme Coverage
@@ -200,6 +202,28 @@ APObservation
 - `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce fragmentation
 - 3 missing hard tasks registered: `hard_currency_conversion`, `hard_manager_preapproval`, `hard_credit_memo` → restores 322 training prompts
 - System prompt updated with concrete JSON example
+
+---
+
+### Run 3 — Qwen2.5-1.5B-Instruct, G=16, 322 prompts (ongoing)
+
+**Hardware:** A10G Small | **Model:** `Qwen/Qwen2.5-1.5B-Instruct` | **Generations/prompt:** 16
+
+![Run 3 — Training dashboard overview at step 112](runs/screenshots/training_dashboard_overview_step112.png)
+![Run 3 — Metrics at step 113: mean 0.722, format 94.9%](runs/screenshots/training_dashboard_metrics_step113.png)
+
+> **Mean reward 0.722** at step 113, format rate **94.9%** — entropy collapse and format failures from Run 2 fully resolved. The 1.5B model with `beta=0.1` KL penalty and temperature 0.7 is producing stable, improving trajectories across all 20 tasks.
+
+---
+
+### Run 4 — Qwen2.5-1.5B-Instruct, G=8, parallel comparison (ongoing)
+
+**Hardware:** A10G Small | **Model:** `Qwen/Qwen2.5-1.5B-Instruct` | **Generations/prompt:** 8
+
+![Run 4 — Training dashboard at step 160](runs/screenshots/run4_dashboard_step160.png)
+![Run 4 — Metrics at step 179: mean 0.709, format 93.7%](runs/screenshots/run4_metrics_step179.png)
+
+> **Mean reward 0.709** at step 179, format rate **93.7%**. Running in parallel with Run 3 (G=16) as an ablation on group size — smaller groups train faster per step; larger groups provide more contrastive signal per prompt. Both runs show consistent improvement from the 0.535 untrained baseline.
 
 ---
 
