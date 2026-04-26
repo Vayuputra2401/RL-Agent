@@ -232,7 +232,7 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
   <div class="nav-links">
     <a href="#how">How It Works</a>
     <a href="#demo">Live Demo</a>
-    <a href="/docs" target="_blank">API Docs ↗</a>
+    <a href="https://pathikreet-ap-clerk-env.hf.space/docs" target="_blank">API Docs ↗</a>
     <a href="https://github.com/Vayuputra2401/RL-Agent" target="_blank">GitHub ↗</a>
     <a href="#demo" class="nav-cta">Try Demo</a>
     <div class="health-pill">
@@ -250,7 +250,7 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
   <p class="hero-sub">AP Commander trains large language models to navigate enterprise Accounts Payable workflows with the rigor a CFO would require. 24 tasks. 2 AI agents. Rewards with no shortcuts.</p>
   <div class="hero-actions">
     <a href="#demo" class="btn btn-primary">▶ &nbsp;Try Live Demo</a>
-    <a href="/docs" target="_blank" class="btn btn-secondary">API Documentation ↗</a>
+    <a href="https://pathikreet-ap-clerk-env.hf.space/docs" target="_blank" class="btn btn-secondary">API Documentation ↗</a>
   </div>
   <div class="hero-meta">
     <div class="hero-meta-item"><strong>24</strong>&nbsp;Tasks</div>
@@ -474,11 +474,11 @@ footer{position:relative;z-index:1;background:var(--bg2);border-top:1px solid va
       <p class="footer-desc">A multi-agent RL environment for enterprise Accounts Payable workflows. Train LLMs to reason through invoice decisions with rigor — and catch fraud before it costs money.</p>
     </div>
     <div class="footer-links">
-      <a href="/docs" target="_blank">API Documentation ↗</a>
+      <a href="https://pathikreet-ap-clerk-env.hf.space" target="_blank">Environment Space ↗</a>
+      <a href="https://pathikreet-ap-clerk-env.hf.space/docs" target="_blank">API Documentation ↗</a>
       <a href="https://github.com/Vayuputra2401/RL-Agent" target="_blank">GitHub ↗</a>
       <a href="https://huggingface.co/spaces/Pathikreet/ap-commander-training" target="_blank">Training Space ↗</a>
-      <a href="/tasks" target="_blank">Task Library ↗</a>
-      <a href="/health" target="_blank">Health Check ↗</a>
+      <a href="https://pathikreet-ap-clerk-env.hf.space/tasks" target="_blank">Task Library ↗</a>
     </div>
   </div>
   <div class="footer-bottom">
