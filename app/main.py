@@ -111,17 +111,122 @@ async def health():
     }
 
 
-@app.get("/tasks", response_model=list)
-async def list_tasks():
-    return [
-        TaskInfo(
-            task_id=tid,
-            name=spec.name,
-            difficulty=spec.difficulty,
-            description=spec.description,
-        )
+@app.get("/tasks")
+async def list_tasks(request: Request = None):
+    tasks = [
+        TaskInfo(task_id=tid, name=spec.name, difficulty=spec.difficulty, description=spec.description)
         for tid, spec in TASKS.items()
     ]
+    accept = (request.headers.get("accept", "") if request else "")
+    if "text/html" in accept:
+        return HTMLResponse(_render_tasks_page(tasks))
+    return tasks
+
+
+def _render_tasks_page(tasks: list) -> str:
+    diff_color = {"easy": "#22c55e", "medium": "#eab308", "hard": "#ef4444", "long-horizon": "#8b5cf6", "oversight": "#0ea5e9"}
+    diff_order  = ["easy", "medium", "hard", "long-horizon", "oversight"]
+    diff_label  = {"easy": "Easy", "medium": "Medium", "hard": "Hard", "long-horizon": "Long-Horizon", "oversight": "Oversight"}
+
+    groups: dict = {d: [] for d in diff_order}
+    for t in tasks:
+        groups.setdefault(t.difficulty, []).append(t)
+
+    sections_html = ""
+    for diff in diff_order:
+        bucket = groups.get(diff, [])
+        if not bucket:
+            continue
+        col = diff_color.get(diff, "#94a3b8")
+        label = diff_label.get(diff, diff)
+        cards = ""
+        for t in bucket:
+            spec = TASKS.get(t.task_id)
+            steps = getattr(spec, "max_steps", 1) if spec else 1
+            cards += f"""
+            <div class="task-card">
+              <div class="card-top">
+                <span class="badge" style="background:{col}22;color:{col};border:1px solid {col}44">{label}</span>
+                <span class="steps-pill">{steps} step{"s" if steps > 1 else ""}</span>
+              </div>
+              <div class="task-name">{t.name}</div>
+              <div class="task-id">{t.task_id}</div>
+              <div class="task-desc">{t.description}</div>
+            </div>"""
+        sections_html += f"""
+        <div class="diff-section">
+          <div class="diff-header">
+            <span class="diff-dot" style="background:{col}"></span>
+            <h2>{label}</h2>
+            <span class="diff-count">{len(bucket)} task{"s" if len(bucket) != 1 else ""}</span>
+          </div>
+          <div class="cards-grid">{cards}</div>
+        </div>"""
+
+    total = len(tasks)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AP Commander — Task Library</title>
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+:root{{--bg:#020817;--bg2:#0a1628;--bg3:#0f1f3d;--glass:rgba(10,22,56,0.7);--border:rgba(14,165,233,0.18);--border2:rgba(14,165,233,0.35);--accent:#0ea5e9;--teal:#14b8a6;--text:#f0f9ff;--dim:#94a3b8;--dimmer:#475569;--grad:linear-gradient(135deg,#0ea5e9,#14b8a6)}}
+body{{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.6;min-height:100vh}}
+body::before{{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(14,165,233,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(14,165,233,0.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}}
+nav{{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:60px;background:rgba(2,8,23,0.9);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}}
+.nav-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);font-size:16px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.nav-links{{display:flex;gap:8px}}
+.nav-links a{{color:var(--dim);text-decoration:none;font-size:13px;padding:5px 12px;border-radius:7px;transition:all .2s}}
+.nav-links a:hover{{color:var(--text);background:rgba(14,165,233,0.08)}}
+.nav-links a.cta{{background:var(--accent);color:#020817;font-weight:700}}
+.nav-links a.cta:hover{{background:#38bdf8}}
+main{{max-width:1100px;margin:0 auto;padding:60px 40px;position:relative;z-index:1}}
+.page-header{{margin-bottom:56px}}
+.page-label{{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px}}
+.page-title{{font-size:clamp(28px,4vw,44px);font-weight:900;letter-spacing:-1.5px;line-height:1.1;margin-bottom:12px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.page-sub{{font-size:15px;color:var(--dim);max-width:500px;line-height:1.7}}
+.total-pill{{display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.1);border:1px solid var(--border2);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--accent);font-weight:700;margin-top:16px}}
+.diff-section{{margin-bottom:48px}}
+.diff-header{{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}}
+.diff-dot{{width:10px;height:10px;border-radius:50%;flex-shrink:0}}
+.diff-header h2{{font-size:18px;font-weight:800;letter-spacing:-.3px}}
+.diff-count{{font-size:12px;color:var(--dim);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-weight:600;margin-left:auto}}
+.cards-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}}
+.task-card{{background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s,transform .2s,box-shadow .2s}}
+.task-card:hover{{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 32px rgba(14,165,233,0.08)}}
+.card-top{{display:flex;align-items:center;gap:8px;margin-bottom:10px}}
+.badge{{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}}
+.steps-pill{{margin-left:auto;font-size:10px;color:var(--dimmer);background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-weight:600;font-family:monospace}}
+.task-name{{font-size:15px;font-weight:800;letter-spacing:-.2px;margin-bottom:4px}}
+.task-id{{font-size:10px;color:var(--dimmer);font-family:monospace;margin-bottom:10px}}
+.task-desc{{font-size:12px;color:var(--dim);line-height:1.6}}
+footer{{text-align:center;padding:32px;font-size:12px;color:var(--dimmer);border-top:1px solid var(--border);margin-top:24px;position:relative;z-index:1}}
+@media(max-width:700px){{main{{padding:40px 20px}}nav{{padding:0 20px}}.cards-grid{{grid-template-columns:1fr}}}}
+</style>
+</head>
+<body>
+<nav>
+  <a class="nav-brand" href="/">⬡ AP Commander</a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/docs">API Docs</a>
+    <a href="https://github.com/Vayuputra2401/RL-Agent" target="_blank">GitHub</a>
+    <a href="https://huggingface.co/spaces/Pathikreet/ap-commander-training" target="_blank" class="cta">Training Space ↗</a>
+  </div>
+</nav>
+<main>
+  <div class="page-header">
+    <div class="page-label">AP Commander</div>
+    <div class="page-title">Task Library</div>
+    <div class="page-sub">Every task is generated fresh from a seeded RNG — same seed, same invoice. No static dataset. The agent must reason, not memorise.</div>
+    <div class="total-pill">⬡ {total} tasks across 5 difficulty tiers</div>
+  </div>
+  {sections_html}
+</main>
+<footer>AP Commander · Pathikreet Chowdhury · Anubhav Bhattacharya · Radhika Ravi · Meta PyTorch OpenEnv × Scaler 2026</footer>
+</body>
+</html>"""
 
 
 @app.post("/reset", response_model=ResetResponse)
