@@ -207,7 +207,7 @@ class OversightObservation(BaseModel):
     known_fraud_patterns: List[str] = []    # hints from training corpus
     audit_budget:       int = 2             # max flags allowed this round
     step_count:         int = 0
-    max_steps:          int = 5            # one verdict per episode
+    max_steps:          int = 5
     action_history:     List[Dict[str, Any]] = []
 
 

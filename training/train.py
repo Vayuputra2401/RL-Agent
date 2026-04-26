@@ -44,25 +44,13 @@ TRAIN_TASKS = [
     'long_fraud_investigation', 'long_audit_trail',
     'long_multi_vendor_split',
 ]
-EVAL_TASKS = [
-    'easy_perfect_match', 'easy_no_po_found',
-    'medium_quantity_shortfall', 'medium_price_discrepancy',
-    'medium_split_delivery', 'medium_vendor_mismatch',
-    'hard_policy_violation', 'hard_duplicate_invoice',
-    'hard_partial_po_match', 'hard_tax_discrepancy',
-    'hard_currency_conversion', 'hard_manager_preapproval', 'hard_credit_memo',
-    'long_invoice_dispute', 'long_policy_migration',
-    'long_batch_reconciliation', 'long_manager_chain',
-    'long_fraud_investigation', 'long_audit_trail',
-    'long_multi_vendor_split',
-]
+EVAL_TASKS = TRAIN_TASKS
 
 VALID_DECISIONS   = {'APPROVE_FULL','APPROVE_PARTIAL','REJECT','ESCALATE','QUERY_VENDOR','HOLD'}
 VALID_REASON_CODES = {'MATCH_CONFIRMED','QUANTITY_MISMATCH','PRICE_DISCREPANCY','POLICY_VIOLATION',
                       'NO_PO_FOUND','DUPLICATE_INVOICE','VENDOR_MISMATCH','TAX_DISCREPANCY',
                       'PENDING_CLARIFICATION','MANAGER_REVIEW'}
 
-# Task difficulty map used by curriculum sampler
 _TASK_DIFFICULTY = {
     'easy_perfect_match': 'easy',   'easy_no_po_found': 'easy',
     'medium_quantity_shortfall': 'medium', 'medium_price_discrepancy': 'medium',
@@ -83,11 +71,7 @@ _UNLOCK_THRESHOLDS = {'easy': 0.70, 'medium': 0.65, 'hard': 0.60}
 # ── Curriculum sampler ──────────────────────────────────────────────────────────
 
 class CurriculumSampler:
-    """
-    Tracks per-difficulty running mean and unlocks harder tasks once thresholds
-    are met. Used both for building the training dataset and for gating tasks in
-    the reward function so early training stays on easier tasks.
-    """
+    """Tracks per-difficulty running mean; unlocks harder tiers once thresholds are met."""
     def __init__(self):
         self._rewards:  dict = collections.defaultdict(list)  # task_id → [rewards]
         self.unlocked:  set  = {'easy'}
@@ -115,21 +99,13 @@ class CurriculumSampler:
                               f'>= threshold {_UNLOCK_THRESHOLDS[diff]}')
 
     def gate_task(self, task_id: str) -> str:
-        """If task's difficulty is not yet unlocked, return easiest unlocked task."""
         if _TASK_DIFFICULTY.get(task_id, 'easy') in self.unlocked:
             return task_id
         easiest = [t for t, d in _TASK_DIFFICULTY.items() if d == 'easy']
         return random.choice(easiest)
 
     def build_dataset_tasks(self) -> list:
-        """
-        Curriculum-weighted task list:
-          easy  → 10 seeds  (always included)
-          medium → 5 seeds  (if unlocked)
-          hard   → 2 seeds  (if unlocked)
-          long   → 2 seeds  (if unlocked)
-        Returns list of (task_id, seed) pairs.
-        """
+        """Return (task_id, seed) pairs for all currently unlocked difficulties."""
         rows = []
         seeds_per_diff = {'easy': 10, 'medium': 5, 'hard': 2, 'long': 2}
         for task_id, diff in _TASK_DIFFICULTY.items():
@@ -153,11 +129,7 @@ CURRICULUM = CurriculumSampler()
 # ── Per-step greedy follow-up policy ───────────────────────────────────────────
 
 def _greedy_followup(obs_dict: dict) -> dict:
-    """
-    Scripted policy for intermediate follow-up steps (used in multi-step rollouts).
-    Reads context_notes added by the environment after ESCALATE/QUERY_VENDOR/HOLD
-    and picks the most appropriate next terminal action.
-    """
+    """Scripted terminal action after an intermediate step, based on revealed context notes."""
     notes = ' '.join(obs_dict.get('context_notes', [])).lower()
     total = abs(float(obs_dict.get('invoice', {}).get('invoice_total', 0) or 0))
 
@@ -228,7 +200,6 @@ class Metrics:
         mean_r = sum(rewards) / len(rewards) if rewards else 0.0
         self.reward_history.append((self.step, mean_r))
 
-        # Per-difficulty reward history
         diff_rewards: dict = collections.defaultdict(list)
         for tid, r in zip(task_ids, rewards):
             d = _TASK_DIFFICULTY.get(tid, 'easy')
@@ -303,14 +274,7 @@ class Metrics:
             print(f'[METRICS] per_task_reward: {task_means}')
 
     def save_all_metrics_figures(self, run_dir: str):
-        """
-        Save six standard RL research metric figures to run_dir.
-        All figures follow conventions used in academic RL papers:
-        - Named axes (xlabel, ylabel)
-        - Figure caption as fig.text below the plot
-        - Dark GitHub-style theme consistent with project
-        - Smoothed curves with raw data visible in background
-        """
+        """Save six training metric figures (reward curve, difficulty curves, format rate, etc.)."""
         PALETTE = {'easy': '#3fb950', 'medium': '#d29922', 'hard': '#f85149', 'long': '#a371f7'}
         BG      = '#0d1117'
         PANEL   = '#161b22'
@@ -673,8 +637,6 @@ def run_episode_accumulated(task_id: str, first_action: dict, seed=None,
         return 0.01, 1
 
 
-# ── Two independent reward functions (guide: use multiple, not one) ─────────────
-
 def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
     """
     Environment reward: accumulated discounted per-step reward from AP Commander.
@@ -703,7 +665,6 @@ def env_reward_fn(completions, task_id=None, seed=None, **kwargs):
         format_ok_list.append(fmt_ok)
         CURRICULUM.record(tid, score)
 
-        # Write structured episode record to JSONL for full verifiability
         if _EPISODE_LOG_PATH:
             try:
                 record = {
@@ -1010,9 +971,7 @@ def main():
     print(f'  Mean: {sum(baseline.values())/len(baseline):.3f}')
     model.train()
 
-    # Dataset: easy/medium × 5 seeds, hard/long × 10 seeds.
-    # Hard/long tasks get more variation to help discover multi-step sequences.
-    # Curriculum gating in env_reward_fn still applies — locked tasks redirect to easy.
+    # Hard/long get more seeds so multi-step sequences see enough variation to learn from
     _SEEDS_PER_DIFF = {'easy': 5, 'medium': 8, 'hard': 20, 'long': 20}
     task_seed_pairs = [
         (tid, s)
@@ -1065,7 +1024,6 @@ def main():
         report_to             = 'none',
         remove_unused_columns = False,
     )
-    # Callback: capture loss + grad_norm into METRICS so live dashboard shows loss curve
     from transformers import TrainerCallback
     class _LossCallback(TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kwargs):
@@ -1077,7 +1035,6 @@ def main():
                 ))
                 METRICS._flush_live()
 
-    # Two independent reward functions (guide: use multiple, not one combined signal)
     trainer = GRPOTrainer(
         model=model, processing_class=tokenizer,
         reward_funcs=[env_reward_fn, format_reward_fn],

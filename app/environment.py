@@ -1,19 +1,4 @@
-"""
-AP Commander — Core AP Clerk Environment Class
-Implements the canonical OpenEnv interface: reset / step / state
-
-Multi-step support (v3):
-  - Tasks with max_steps > 1 allow intermediate actions before the final decision.
-  - QUERY_VENDOR / ESCALATE / HOLD are intermediate actions that reveal context
-    and record history but do not end the episode (done=False).
-  - HYPOTHETICAL is a training-only action: returns a simulated outcome for an
-    alternative decision path without committing to it (done=False, score=0.01).
-  - Any terminal action (APPROVE_FULL / APPROVE_PARTIAL / REJECT) ends the episode.
-  - If the step limit is reached with an intermediate action still pending,
-    the action is treated as terminal and graded immediately.
-  - Long-horizon tasks (max_steps 10-16) use the same mechanism — actors
-    (VendorActor, ManagerActor, ComplianceActor) generate context notes at reset.
-"""
+"""AP Commander — Core AP Clerk Environment (OpenEnv interface: reset / step / state)."""
 
 from __future__ import annotations
 from typing import Optional, Tuple, Dict, Any, List
@@ -46,25 +31,9 @@ _INTERMEDIATE = frozenset({
 
 class APClerkEnvironment(_OpenEnvBase):
     """
-    AP Commander — AI Accounts Payable Clerk Environment.
-
-    Episode flow (single-step tasks):
-        obs = env.reset(task_id, seed=None)
-        obs, reward, done, info = env.step(action)   # done=True immediately
-
-    Episode flow (multi-step tasks, max_steps > 1):
-        obs = env.reset(task_id, seed=None)
-        obs, reward, done, info = env.step(intermediate_action)  # done=False
-        ...
-        obs, reward, done, info = env.step(terminal_action)      # done=True
-
-    HYPOTHETICAL action (training-only):
-        obs, reward, done, info = env.step(hypothetical_action)
-        # done=False, reward.score=0.01, obs.context_notes contains simulated outcome
-
-    seed=None produces a fresh random episode each call.
-    A fixed integer seed produces a fully reproducible episode.
-    Long-horizon tasks (max_steps 10-16) use actors via pre-generated context notes.
+    AP Clerk environment. Intermediate actions (QUERY_VENDOR / ESCALATE / HOLD / HYPOTHETICAL)
+    reveal context without ending the episode. Terminal actions grade and close it.
+    Fixed seed → reproducible episode; None → fresh random each call.
     """
 
     def __init__(self) -> None:
@@ -144,7 +113,6 @@ class APClerkEnvironment(_OpenEnvBase):
 
         # ── Intermediate action (episode continues) ───────────────────────────
         if is_intermediate and not at_limit:
-            # Reveal context note matched to the action type
             if self._context_store:
                 prefix_map = {
                     DecisionType.ESCALATE:     "[MANAGER]",
@@ -152,7 +120,7 @@ class APClerkEnvironment(_OpenEnvBase):
                     DecisionType.HOLD:         "[COMPLIANCE]",
                 }
                 preferred_prefix = prefix_map.get(action.decision, "")
-                # Try to find a note matching the action's prefix; fall back to FIFO
+                # Prefer context note matching the action type; fall back to FIFO
                 matched_idx = next(
                     (i for i, n in enumerate(self._context_store)
                      if preferred_prefix and n.startswith(preferred_prefix)),
@@ -161,7 +129,7 @@ class APClerkEnvironment(_OpenEnvBase):
                 note = self._context_store.pop(matched_idx)
                 self._observation.context_notes.append(note)
 
-            # Record in history so graders can detect multi-step usage
+            # History lets graders award the process bonus for correct sequences
             self._observation.action_history.append({
                 "step":        self._step_count,
                 "decision":    action.decision.value,

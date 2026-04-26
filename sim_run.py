@@ -467,7 +467,6 @@ def _terminal_action(task_id: str, obs) -> APAction:
             ),
         )
 
-    # Default fallback
     return APAction(
         decision=DecisionType.REJECT,
         approved_amount=0.0,

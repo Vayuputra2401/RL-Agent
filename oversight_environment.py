@@ -1,22 +1,7 @@
 """
-AP Commander — Oversight Environment
-Theme #1: Fleet AI / Scalable Oversight
-
-An Oversight Agent receives a batch of completed AP Clerk episodes and must:
-  1. Review each episode summary (invoice, decision, amount, explanation)
-  2. Identify which episodes contain suspicious/incorrect decisions
-  3. Recommend: CLEAR | FLAG_FOR_REVIEW | ESCALATE_TO_AUDIT
-  4. Provide a specific signal (numeric citation) explaining why
-
-The ground-truth fraud labels are hidden from the agent during inference
-but used to compute rewards.
-
-Episode flow:
-    obs = env.reset(seed=None, num_episodes=5)
-    for each episode in obs.episode_summaries:
-        action = OversightAction(episode_id=..., verdict=..., signal=..., confidence=...)
-        obs, reward, done, info = env.step(action)
-    # done=True after all episodes reviewed OR if agent submits FINISH
+Fleet AI Oversight Environment — agent reviews a batch of AP Clerk episodes and
+identifies fraud (CLEAR | FLAG_FOR_REVIEW | ESCALATE_TO_AUDIT). Ground-truth fraud
+labels are hidden during inference; false positives carry a real −0.25 penalty.
 """
 
 from __future__ import annotations
@@ -230,7 +215,6 @@ class OversightEnvironment(_OpenEnvBase):
         self._episode_scores = []
         self._done       = False
 
-        # Decide how many fraudulent episodes to inject (1-2 out of num_episodes)
         num_fraud = rng.randint(1, min(2, num_episodes - 1))
         fraud_indices = rng.sample(range(num_episodes), num_fraud)
 
@@ -256,7 +240,6 @@ class OversightEnvironment(_OpenEnvBase):
             ep.is_fraudulent = False
             ep.fraud_type    = None
 
-        # Select 2 hint patterns from pool
         hint_count = min(2, len(_FRAUD_PATTERNS))
         hints = rng.sample(_FRAUD_PATTERNS, hint_count)
 
@@ -292,7 +275,6 @@ class OversightEnvironment(_OpenEnvBase):
         score, breakdown, fb = self._grade_verdict(action, is_fraud, flagged, fraud_type)
         self._episode_scores.append(score)
 
-        # Update observation
         self._observation.step_count += 1
         self._observation.action_history.append({
             "step":       self._observation.step_count,

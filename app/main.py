@@ -1,12 +1,4 @@
-"""
-AP Commander — FastAPI Server
-Exposes AP Clerk, Oversight, and Curriculum endpoints.
-
-AP Clerk:    POST /reset  POST /step  GET /state
-Oversight:   POST /oversight/reset  POST /oversight/step  GET /oversight/state
-Curriculum:  GET  /curriculum/next_task
-Meta:        GET /tasks  GET /health  GET /stats
-"""
+"""AP Commander — FastAPI server for AP Clerk, Oversight, and Curriculum endpoints."""
 
 from __future__ import annotations
 import uuid

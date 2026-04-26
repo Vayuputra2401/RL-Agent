@@ -1,16 +1,4 @@
-"""
-AP Clerk Environment — Task Definitions, Generators & Graders
-Ten tasks across easy / medium / hard.
-All graders are pure functions: grade_xxx(obs, action) -> APReward.
-All generators produce a fresh randomised observation each episode.
-
-Improvements v2:
-  1. Randomised policy — freight cap and price tolerance vary per episode.
-  2. Distractor documents — CLOSED POs and wrong-vendor GRNs included in every episode.
-  3. Multi-step support — hard tasks reveal context on ESCALATE / QUERY_VENDOR.
-  4. Harder graders — tighter tolerances, more keywords required, stricter partial credit.
-  5. Four new task types — split delivery, vendor mismatch, partial PO, tax discrepancy.
-"""
+"""AP Clerk task definitions: generators (fresh randomised obs per call) and graders (pure functions)."""
 
 from __future__ import annotations
 import random as _random
@@ -179,7 +167,6 @@ def generate_easy_perfect(seed=None) -> APObservation:
         grn_id=grn_id, po_number=po_num,
         lines=[GRNLine(description=desc, received_quantity=qty)],
     )]
-    # Distractor documents
     for _ in range(rng.randint(1, 2)):
         pos.append(_distractor_po(rng, exclude_vendor=vendor))
     if rng.random() < 0.6:
