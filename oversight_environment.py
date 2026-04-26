@@ -25,6 +25,20 @@ import re as _re
 import uuid
 from typing import Optional, Tuple, Dict, Any, List
 
+# OpenEnv base class — use real package if available, else local stub
+try:
+    from openenv.core.env_server import Environment as _OpenEnvBase
+except ImportError:
+    class _OpenEnvBase:  # type: ignore[no-redef]
+        """Stub matching the OpenEnv Environment interface."""
+        def reset(self, seed=None, episode_id=None, **kwargs):
+            raise NotImplementedError
+        def step(self, action, timeout_s=None, **kwargs):
+            raise NotImplementedError
+        @property
+        def state(self):
+            raise NotImplementedError
+
 from app.models import (
     OversightObservation, OversightAction, OversightReward,
     EpisodeSummary,
@@ -183,7 +197,7 @@ _FRAUD_PATTERNS = [
 # OversightEnvironment
 # ══════════════════════════════════════════════════════════════════════════════
 
-class OversightEnvironment:
+class OversightEnvironment(_OpenEnvBase):
     """
     Fleet AI Oversight Environment — Agent monitors a batch of AP Clerk decisions.
 
