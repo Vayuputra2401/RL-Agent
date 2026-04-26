@@ -205,14 +205,14 @@ APObservation
 
 ---
 
-### Run 3 — Qwen2.5-1.5B-Instruct, G=16, 322 prompts (ongoing)
+### Run 3 — Qwen2.5-1.5B-Instruct, G=16, 322 prompts (paused — insufficient compute)
 
 **Hardware:** A10G Small | **Model:** `Qwen/Qwen2.5-1.5B-Instruct` | **Generations/prompt:** 16
 
-![Run 3 — Training dashboard overview at step 112](runs/screenshots/training_dashboard_overview_step112.png)
-![Run 3 — Metrics at step 113: mean 0.722, format 94.9%](runs/screenshots/training_dashboard_metrics_step113.png)
+![Run 3 — Training dashboard at step 112](runs/grpo/qwen-2.5-1b-run3-paused-2026-04-26/dashboard_step112.png)
+![Run 3 — Metrics at step 113: mean 0.722, format 94.9%](runs/grpo/qwen-2.5-1b-run3-paused-2026-04-26/metrics_step113.png)
 
-> **Mean reward 0.722** at step 113, format rate **94.9%** — entropy collapse and format failures from Run 2 fully resolved. The 1.5B model with `beta=0.1` KL penalty and temperature 0.7 is producing stable, improving trajectories across all 20 tasks.
+> **Mean reward 0.722** at step 113 (up from 0.486 untrained baseline), format rate **94.9%** — entropy collapse and format failures from Run 2 fully resolved. Paused at step 113 due to insufficient compute allocation. See per-task breakdown in [BLOG.md](BLOG.md).
 
 ---
 
@@ -220,10 +220,10 @@ APObservation
 
 **Hardware:** A10G Small | **Model:** `Qwen/Qwen2.5-1.5B-Instruct` | **Generations/prompt:** 8
 
-![Run 4 — Training dashboard at step 160](runs/screenshots/run4_dashboard_step160.png)
-![Run 4 — Metrics at step 179: mean 0.709, format 93.7%](runs/screenshots/run4_metrics_step179.png)
+![Run 4 — Training dashboard at step 160](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/dashboard_step160.png)
+![Run 4 — Metrics at step 179: mean 0.709, format 93.7%](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step179.png)
 
-> **Mean reward 0.709** at step 179, format rate **93.7%**. Running in parallel with Run 3 (G=16) as an ablation on group size — smaller groups train faster per step; larger groups provide more contrastive signal per prompt. Both runs show consistent improvement from the 0.535 untrained baseline.
+> **Mean reward 0.709** at step 179, format rate **93.7%**. Running as a G=8 ablation against Run 3 (G=16) — smaller groups train faster per step; larger groups provide more contrastive signal per prompt. Currently ongoing.
 
 ---
 

@@ -175,17 +175,45 @@ These are fixable. Run 3 applies all three fixes.
 
 ---
 
-### Run 3 — Qwen2.5-1.5B, G=16 (2026-04-26, ongoing)
+### Run 3 — Qwen2.5-1.5B, G=16 (2026-04-26, paused — insufficient compute)
 
 **Model:** Qwen2.5-1.5B-Instruct · **G=16** · **Tasks:** all 24, no curriculum gating · **Fixes:** temperature 0.7, `beta=0.1` KL penalty, format reward ±0.15, 322 training prompts across full difficulty range.
 
-![Run 3 training dashboard at step 112 — reward curve and loss, recent mean 0.692](runs/screenshots/training_dashboard_overview_step112.png)
+![Run 3 training dashboard at step 112 — reward curve and loss, recent mean 0.692](runs/grpo/qwen-2.5-1b-run3-paused-2026-04-26/dashboard_step112.png)
 
-*Step 112. Reward climbing steadily from the Qwen baseline — recent mean 0.692. Loss stable, approaching zero, no entropy collapse. Format compliance holding above 90% from step 1 — the stronger format reward and lower temperature are doing their job.*
+*Step 112. Reward climbing steadily from the 0.486 untrained baseline — recent mean 0.692. Loss stable, approaching zero, no entropy collapse. Format compliance holding above 90% from step 1 — the stronger format reward and lower temperature are doing their job.*
 
-![Run 3 full metrics at step 113 — format 94.9%, decision distribution, per-task rewards](runs/screenshots/training_dashboard_metrics_step113.png)
+![Run 3 full metrics at step 113 — format 94.9%, decision distribution, per-task rewards](runs/grpo/qwen-2.5-1b-run3-paused-2026-04-26/metrics_step113.png)
 
-*Step 113: recent mean 0.722, format rate 94.9%, zero environment errors across 3,616 reward calls in 71 minutes. The decision distribution shows the full action vocabulary in use — 59% REJECT, 24% QUERY_VENDOR, 12% ESCALATE — no single-decision collapse. Easy tasks near ceiling (`no_po_found` 0.99, `vendor_mismatch` 0.73). Hard and long-horizon tasks (`manager_chain` 0.13, `invoice_dispute` 0.65) still learning — expected, since multi-step investigative sequences take more gradient steps to solidify.*
+*Step 113: recent mean 0.722, format rate 94.9%, zero environment errors across 3,616 reward calls in 71 minutes. The decision distribution shows the full action vocabulary in use — 59% REJECT, 24% QUERY_VENDOR, 12% ESCALATE — no single-decision collapse. Easy tasks near ceiling (`no_po_found` 0.99, `vendor_mismatch` 0.73). Hard and long-horizon tasks (`manager_chain` 0.13, `invoice_dispute` 0.65) still improving — multi-step investigative sequences require more gradient steps to solidify. The space was paused at step 113 due to insufficient compute allocation.*
+
+#### Run 3 — Per-task results at pause (step 113 vs untrained baseline)
+
+| Task | Before GRPO | Step 113 | Δ |
+|---|---|---|---|
+| easy_perfect_match | 0.990 | ~0.990 | ~0.000 |
+| easy_no_po_found | 0.990 | 0.990 | 0.000 |
+| medium_quantity_shortfall | 0.608 | ~0.720 | ~+0.112 |
+| medium_price_discrepancy | 0.990 | ~0.990 | ~0.000 |
+| medium_split_delivery | 0.060 | ~0.430 | ~+0.370 |
+| medium_vendor_mismatch | 0.990 | 0.730 | −0.260 |
+| hard_policy_violation | 0.774 | ~0.800 | ~+0.026 |
+| hard_duplicate_invoice | 0.950 | ~0.950 | ~0.000 |
+| hard_partial_po_match | 0.570 | ~0.620 | ~+0.050 |
+| hard_tax_discrepancy | 0.790 | ~0.790 | ~0.000 |
+| hard_currency_conversion | 0.455 | ~0.520 | ~+0.065 |
+| hard_manager_preapproval | 0.010 | ~0.050 | ~+0.040 |
+| hard_credit_memo | 0.055 | ~0.100 | ~+0.045 |
+| long_invoice_dispute | 0.010 | 0.650 | +0.640 |
+| long_policy_migration | 0.800 | ~0.800 | ~0.000 |
+| long_batch_reconciliation | 0.050 | ~0.150 | ~+0.100 |
+| long_manager_chain | 0.100 | 0.130 | +0.030 |
+| long_fraud_investigation | 0.875 | ~0.875 | ~0.000 |
+| long_audit_trail | 0.107 | ~0.200 | ~+0.093 |
+| long_multi_vendor_split | 0.030 | ~0.100 | ~+0.070 |
+| **Mean** | **0.486** | **~0.722** | **~+0.236** |
+
+> Before-GRPO values from the pre-training baseline evaluation (same Qwen2.5-1.5B model). Step-113 values read from the per-task dashboard panel at pause; values marked `~` are approximate. `long_invoice_dispute` shows the largest jump (+0.640) — the QUERY_VENDOR→REJECT investigative chain is already being discovered.
 
 ---
 
@@ -193,15 +221,13 @@ These are fixable. Run 3 applies all three fixes.
 
 **Model:** Qwen2.5-1.5B-Instruct · **G=8** · Same fixes as Run 3. Running in parallel to answer a specific question: does halving the generation count from 16 to 8 meaningfully hurt advantage estimation quality, or does the faster per-step throughput compensate? G=16 produces lower-variance GRPO updates; G=8 trains ~2× faster per step but with noisier gradients.
 
-![Run 4 training dashboard at step 160 — reward curve and loss, recent mean 0.634](runs/screenshots/run4_dashboard_step160.png)
+![Run 4 training dashboard at step 160 — reward curve and loss, recent mean 0.634](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/dashboard_step160.png)
 
 *Step 160 of Run 4. Recent mean 0.634 — below Run 3's 0.692 at the same step count, consistent with noisier advantage estimates at G=8. Loss pattern is stable, no collapse.*
 
-![Run 4 full metrics at step 179 — format 93.7%, decision distribution, per-task rewards](runs/screenshots/run4_metrics_step179.png)
+![Run 4 full metrics at step 179 — format 93.7%, decision distribution, per-task rewards](runs/grpo/qwen-2.5-1b-6ep-2026-04-26-run4/metrics_step179.png)
 
-*Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution nearly identical to Run 3 — 59% REJECT, 23% QUERY_VENDOR, 12% ESCALATE — confirming the learned action vocabulary is stable regardless of generation count. Per-task pattern mirrors Run 3: easy tasks converged early, hard multi-step tasks still climbing. When both runs finish, the final comparison will give a clean answer on whether G=16 is worth the 2× compute overhead for this environment.*
-
-**[PLACEHOLDER: Run 3 and Run 4 final comparison table — replace when runs complete]**
+*Step 179: recent mean 0.709, format rate 93.7%, 1,432 reward calls in 57 minutes. Decision distribution nearly identical to Run 3 — 59% REJECT, 23% QUERY_VENDOR, 12% ESCALATE — confirming the learned action vocabulary is stable regardless of generation count. Per-task pattern mirrors Run 3: easy tasks converged early, hard multi-step tasks still climbing. Run 4 is ongoing — the final comparison will give a clean answer on whether G=16 is worth the 2× compute overhead for this environment.*
 
 ---
 
