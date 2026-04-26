@@ -44,6 +44,10 @@ HF Training Space (A10G)            HF Environment Space
 
 **The Environment Space** ([`pathikreet-ap-clerk-env.hf.space`](https://pathikreet-ap-clerk-env.hf.space/docs)) is a FastAPI server that stays live independently of training. It exposes `/reset`, `/step`, `/oversight/*`, and `/curriculum/*` endpoints. Any model, any framework, any machine can train against it by making HTTP calls — no local setup needed. 24 tasks, seeded RNG, no static dataset.
 
+![AP Commander environment Space — interactive product website at pathikreet-ap-clerk-env.hf.space](runs/screenshots/env_ui_hero.png)
+
+*The environment Space serves as both an API backend and an interactive product website. Pick a task, generate a live episode, submit an action, and see the exact reward breakdown — no code required. The "Live" indicator in the nav confirms the FastAPI server is healthy. Built entirely in HTML/CSS/JS returned from the FastAPI root route — zero additional dependencies.*
+
 **The Training Space** ([`Pathikreet/ap-commander-training`](https://huggingface.co/spaces/Pathikreet/ap-commander-training)) is a Gradio UI that runs the full GRPO training loop on an A10G GPU. Open it, select a model, paste your HF token if using a gated model (Qwen is public — token not required), and click Start. Reward curves, decision distribution, and per-task metrics update live every 15 seconds. Want to run it yourself? See [Run Your Own Training](#run-your-own-training) below.
 
 **AP Clerk agent** — receives a structured observation: invoice, purchase orders, goods receipt notes, and company policy. Outputs a structured JSON decision: action, approved amount, reason code, and an explanation that must cite specific dollar figures to score well.
@@ -145,13 +149,19 @@ Run 2 was extended to 17 tasks with 160 prompts and stopped early. What went wro
 
 ---
 
-### Run 3 — In Progress
+### Run 3 — In Progress (2026-04-26)
 
-Fixes applied: temperature → 0.7, `beta=0.1` (KL penalty to prevent entropy collapse), format reward → ±0.15, curriculum gating disabled — all 20 tasks train from step 1, `NUM_GENERATIONS=16`, 322 training prompts across full difficulty range.
+Fixes applied: temperature → 0.7, `beta=0.1` (KL penalty to prevent entropy collapse), format reward → ±0.15, curriculum gating disabled — all 24 tasks train from step 1, `NUM_GENERATIONS=16`, 322 training prompts across full difficulty range.
 
-**[PLACEHOLDER: Run 3 reward curve — replace with `runs/grpo/run3-.../reward_curve.png` when complete]**
+![Run 3 training dashboard at step 112 — reward curve and loss curve, recent mean 0.692](runs/screenshots/training_dashboard_overview_step112.png)
 
-**[PLACEHOLDER: Run 3 before/after results table — replace with final numbers]**
+*Step 112 of Run 3. The reward curve shows a consistent upward trend from the 0.535 untrained Qwen baseline toward 0.692 recent mean. Loss is stable and trending toward zero — no entropy collapse this time. Format rate holding above 90% throughout, a direct result of strengthening the format reward to ±0.15 and dropping temperature to 0.7.*
+
+![Run 3 full metrics at step 113 — format compliance 94.9%, decision distribution, per-task mean rewards](runs/screenshots/training_dashboard_metrics_step113.png)
+
+*Step 113 metrics: recent mean reward 0.722, format rate 94.9%, 0 environment errors across 3,616 reward calls in 71 minutes. Decision distribution shows the model using the full action vocabulary — 59% REJECT, 24% QUERY\_VENDOR, 12% ESCALATE — rather than collapsing to a single decision as in Run 2. Per-task breakdown: easy tasks (`no_po_found` 0.99, `vendor_mismatch` 0.73) have converged; hard multi-step tasks (`manager_chain` 0.13, `invoice_dispute` 0.65) are still learning. This is expected — longer investigative sequences require more gradient steps to surface.*
+
+**[PLACEHOLDER: Run 3 before/after results table — replace with final numbers when run completes]**
 
 ---
 
