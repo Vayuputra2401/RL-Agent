@@ -224,6 +224,7 @@ class APClerkEnvironment(_OpenEnvBase):
         }
         return self._observation, reward, self._done, info
 
+    @property
     def state(self) -> Dict[str, Any]:
         return {
             "task_id":             self._task_id,

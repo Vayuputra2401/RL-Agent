@@ -328,6 +328,7 @@ class OversightEnvironment(_OpenEnvBase):
         }
         return self._observation, reward, done, info
 
+    @property
     def state(self) -> Dict[str, Any]:
         return {
             "reviewed": list(self._reviewed),

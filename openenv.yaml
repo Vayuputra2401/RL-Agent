@@ -14,7 +14,7 @@ description: >
     Theme #4 (Self-Improvement): Adaptive curriculum endpoint that escalates
       task difficulty based on agent performance history; HYPOTHETICAL action
       for counterfactual self-play exploration.
-  27 total tasks: 13 original (easy/medium/hard) + 7 long-horizon + 4 oversight + 3 reserve.
+  24 total tasks: 13 original (easy/medium/hard) + 7 long-horizon + 4 oversight.
   Bonus prize targets: Fleet AI (Scalable Oversight), Scaler AI Labs (Enterprise Workflows).
 
 author: "Pathikreet Chowdhury, Anubhav Bhattacharya, Radhika Ravi"

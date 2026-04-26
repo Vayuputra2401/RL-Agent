@@ -28,6 +28,7 @@ from .models import (
 )
 from .environment import APClerkEnvironment
 from .tasks import TASKS
+from .ui import HTML_PAGE
 from oversight_environment import OversightEnvironment
 
 logging.basicConfig(level=logging.INFO)
@@ -103,29 +104,7 @@ def _get_oversight_session(session_id: str) -> OversightEnvironment:
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return """
-    <html><body style="font-family:monospace;padding:2rem;background:#0f0f0f;color:#e0e0e0">
-    <h1>AP Commander — Multi-Agent Enterprise Financial Environment</h1>
-    <p>OpenEnv multi-agent environment: AP Clerk + Fleet AI Oversight + Adaptive Curriculum.</p>
-    <p style="color:#aaa">
-      27 tasks &nbsp;|&nbsp; easy / medium / hard / long-horizon / oversight &nbsp;|&nbsp;
-      multi-step (up to 16 steps) &nbsp;|&nbsp; actor-agents (vendor, manager, compliance) &nbsp;|&nbsp;
-      adaptive curriculum
-    </p>
-    <h3 style="color:#7fdbff">AP Clerk (Theme #3 + #2)</h3>
-    <p style="color:#888">POST /reset → POST /step → GET /state</p>
-    <h3 style="color:#7fdbff">Oversight Agent (Theme #1 Fleet AI)</h3>
-    <p style="color:#888">POST /oversight/reset → POST /oversight/step → GET /oversight/state</p>
-    <h3 style="color:#7fdbff">Adaptive Curriculum (Theme #4)</h3>
-    <p style="color:#888">GET /curriculum/next_task?session_history=[...]</p>
-    <ul>
-      <li><a href="/docs" style="color:#7fdbff">/docs</a> — Swagger UI</li>
-      <li><a href="/tasks" style="color:#7fdbff">/tasks</a> — List all 27 tasks</li>
-      <li><a href="/health" style="color:#7fdbff">/health</a> — Health check</li>
-      <li><a href="/stats" style="color:#7fdbff">/stats</a> — Live episode statistics</li>
-    </ul>
-    </body></html>
-    """
+    return HTML_PAGE
 
 
 @app.get("/health")
@@ -214,7 +193,7 @@ async def step(body: StepRequest):
 @app.get("/state", response_model=StateResponse)
 async def state(session_id: str):
     env = _get_session(session_id)
-    s = env.state()
+    s = env.state
     return StateResponse(
         session_id=session_id,
         task_id=s["task_id"],
@@ -302,7 +281,7 @@ async def oversight_step(body: OversightStepRequest):
 async def oversight_state(session_id: str):
     """Get current state of an Oversight session."""
     env = _get_oversight_session(session_id)
-    return {"session_id": session_id, **env.state()}
+    return {"session_id": session_id, **env.state}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
